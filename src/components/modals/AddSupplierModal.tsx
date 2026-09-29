@@ -17,6 +17,7 @@ import {
   CreateSupplierRequest,
 } from '../../api/services/suppliers';
 import { toast } from 'react-hot-toast';
+import { SUPPLIER_PAYMENT_METHODS } from '@/constants/suppliers';
 
 interface AddSupplierModalProps {
   open: boolean;
@@ -80,14 +81,7 @@ const countries = [
   { value: 'Australia', label: 'Australia' },
 ];
 
-const paymentMethods = [
-  { value: 'IBAN Transfer', label: 'IBAN Transfer' },
-  { value: 'Wire Transfer', label: 'Wire Transfer' },
-  { value: 'Credit Card', label: 'Credit Card' },
-  { value: 'PayPal', label: 'PayPal' },
-  { value: 'Bank Transfer', label: 'Bank Transfer' },
-  { value: 'Cash on Delivery', label: 'Cash on Delivery' },
-];
+const paymentMethods = SUPPLIER_PAYMENT_METHODS.map((m) => ({ value: m, label: m }));
 
 export default function AddSupplierModal({
   open,

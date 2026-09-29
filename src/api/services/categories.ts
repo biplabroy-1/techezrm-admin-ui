@@ -114,18 +114,38 @@ class CategoryService {
       );
     }
   }
-    // Get all categories without pagination and filtering
-  async fetchAllCategories() {
-    try {
-      const url = this.baseUrl + '/all';
-      const response = await api.get(url);
-      return response.data;
-    } catch (error: any) {
-      throw new Error(
-        error.response?.data?.message || 'Failed to fetch categories'
-      );
+    // Get all categories without pagination and filtering.
+    //
+    // Backs GET /private/categories/all, which the Add/Update Product pages use to
+    // populate a checkbox list. The response is deliberately TYPED here: when this
+    // returned bare `any`, the pages read `data?.data?.categories` and a mismatch
+    // between the declared and actual shape failed silently - the list rendered
+    // empty with no error, because `isLoading`/`error` were destructured and unused.
+    async fetchAllCategories(): Promise<CategoriesListResponse> {
+      try {
+        const url = this.baseUrl + '/all';
+        const response = await api.get(url);
+        return response.data;
+      } catch (error: any) {
+        // Read the message from BOTH shapes, because the axios response
+        // interceptor in api/config/api.ts ends with
+        //     return Promise.reject(error?.response?.data || error)
+        // so a failed request rejects with the response BODY
+        // ({ success: false, message: "..." }) rather than an axios error.
+        // Reading only `error.response?.data?.message` therefore always found
+        // undefined here and every real cause - a 401, a 404, a 500 - collapsed
+        // into the same useless "Failed to fetch categories" string, which is
+        // exactly the silent failure this method's error path was meant to end.
+        // A genuine network failure or timeout has no `response` at all but does
+        // have a useful `message` ("Network Error", "timeout of 10000ms
+        // exceeded"), so surfacing that is the point.
+        throw new Error(
+          error?.message ||
+            error?.response?.data?.message ||
+            'Failed to fetch categories'
+        );
+      }
     }
-  }
 }
 
 export const categoryService = new CategoryService();

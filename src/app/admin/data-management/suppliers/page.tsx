@@ -25,6 +25,7 @@ import {
   TableRowData,
 } from '../../../../components/TableComponent';
 import { toast } from 'react-toastify';
+import { SUPPLIER_PAYMENT_FILTER_OPTIONS } from '@/constants/suppliers';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -291,14 +292,7 @@ export default function SuppliersListing() {
     { value: 'Germany', label: 'Germany' },
   ];
 
-  const paymentOptions = [
-    { value: '', label: 'All Payment Methods' },
-    { value: 'Wire Transfer', label: 'Wire Transfer' },
-    { value: 'PayPal', label: 'PayPal' },
-    { value: 'Credit Card', label: 'Credit Card' },
-    { value: 'UPI', label: 'UPI' },
-    { value: 'Bank Transfer', label: 'Bank Transfer' },
-  ];
+  const paymentOptions = SUPPLIER_PAYMENT_FILTER_OPTIONS;
 
   return (
     <Box

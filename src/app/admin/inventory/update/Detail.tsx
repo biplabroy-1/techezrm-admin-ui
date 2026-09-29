@@ -181,7 +181,10 @@ const productData = {
   };
 
   const categories: CategoryItem[] =
-    categoriesData?.data?.categories?.map((cat: any) => ({
+    // Top-level `categories`, not `data.categories`: /private/categories/all
+    // returns { success, categories }. The nested read always yielded undefined,
+    // so this list was always empty.
+    categoriesData?.categories?.map((cat: any) => ({
       _id: cat._id,
       name: cat.name,
     })) ?? [];
@@ -843,6 +846,28 @@ useEffect(() => {
                   Categories *
                 </Typography>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {/* Same three states the Add Product form now has - a failed
+                      fetch must not look like "this store has no categories". */}
+                  {isLoading && (
+                    <Typography variant="body2" color="text.secondary">
+                      Loading categories…
+                    </Typography>
+                  )}
+
+                  {!isLoading && error && (
+                    <Typography variant="body2" color="error">
+                      Could not load categories:{" "}
+                      {(error as Error)?.message ?? "request failed"}
+                    </Typography>
+                  )}
+
+                  {!isLoading && !error && categories.length === 0 && (
+                    <Typography variant="body2" color="text.secondary">
+                      No categories exist yet. Create one under Data Management →
+                      Categories, then reload this page.
+                    </Typography>
+                  )}
+
                   {categories.map((category) => (
                     <Box key={category?._id} sx={{ display: "flex", alignItems: "center" }}>
                       <FormControlLabel

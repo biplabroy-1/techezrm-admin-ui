@@ -40,7 +40,19 @@ export interface CreateProductRequest {
   inStock: boolean;
   bannerImage?: File;
   images?: File[];
+  /** Free-form labels. The Product model declares `tags: [String]`. */
+  tags?: string[];
 }
+
+/**
+ * The shape the admin-ui Add Product form builds before handing it to
+ * useAddProduct. Identical to CreateProductRequest today; kept as its own name
+ * because the page imported `CreateProductFormData` while the only place it had
+ * ever been declared was a commented-out block in the services barrel - so the
+ * import resolved to nothing and tsc reported
+ * TS2305: Module '"@/api/services"' has no exported member 'CreateProductFormData'.
+ */
+export interface CreateProductFormData extends CreateProductRequest {}
 
 export interface ProductResponse {
   success: boolean;
@@ -172,6 +184,15 @@ class ProductService {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         data.images.forEach((image) => {
           formData.append('images', image);
+        });
+      }
+
+      // Repeated field name, because the schema declares `tags: [String]` -
+      // appending a joined string would store one tag containing commas.
+      // Skipped when empty so we do not send a literal "" as a tag.
+      if (data.tags?.length) {
+        data.tags.forEach((tag) => {
+          formData.append('tags', tag);
         });
       }
   

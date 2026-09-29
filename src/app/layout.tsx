@@ -1,6 +1,11 @@
 import type { Metadata } from 'next';
 import ClientProvider from './ClientProvider';
 import './globals.css';
+// react-toastify ships no styles unless you import them. Without this the
+// <ToastContainer /> rendered below is an empty, unstyled box, so every
+// toast.success()/toast.error() call in the app was invisible - users got no
+// feedback at all when a create/update/delete succeeded or failed.
+import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer } from 'react-toastify';
 
 export const metadata: Metadata = {

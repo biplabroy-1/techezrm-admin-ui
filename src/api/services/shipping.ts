@@ -1,3 +1,5 @@
+import { BASE_URL } from '../config/endpoints';
+
 export interface ShippingCalculationRequest {
   includedServices: string;
   portFromFees: boolean;
@@ -95,8 +97,11 @@ class ShippingService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL =
-      process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+    // Use the shared BASE_URL rather than re-reading the env var, so there is one
+    // place that knows where the API lives. The old fallback was
+    // `http://localhost:3001`, but the server listens on 5007 (server/.env PORT),
+    // so a missing env var silently sent every shipping request to a dead port.
+    this.baseURL = BASE_URL || 'http://localhost:5007/api/v1';
   }
 
   async calculateShippingCost(

@@ -130,7 +130,15 @@ export default function Detail({ product }: DetailProps) {
   const addProductMutation = useAddProduct()
 
   // Local state
-  const [tags, setTags] = useState<string[]>(["trend", "instagram"])
+  // Start EMPTY.
+  //
+  // This was hardcoded to ["trend", "instagram"], so every product created
+  // through this form silently carried those two demo labels - the payload in
+  // handleSubmit never even included them, so nothing saved, but they were shown
+  // as if they were real. They are not part of the product taxonomy: the curated
+  // list the server actually uses lives in `@constants/filter` (e.g.
+  // "Natural / Synthetic", "Vegan / Vegetarian / Halal / Kosher").
+  const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
   const [minMaxTags, setMinMaxTags] = useState<string[]>([])
   const [minMaxInput, setMinMaxInput] = useState("")
@@ -160,7 +168,7 @@ type CategoryItem = {
 };
 
 const categories: CategoryItem[] =
-  categoriesData?.data?.categories?.map((cat: any) => ({
+  categoriesData?.categories?.map((cat: any) => ({
     _id: cat._id,
     name: cat.name,
   })) ?? [];
@@ -220,6 +228,9 @@ const categories: CategoryItem[] =
       inStock: inStock,
       bannerImage: bannerImage || undefined,
       images: uploadedFiles.length > 0 ? uploadedFiles : undefined,
+      // Was omitted entirely, so tags collected in the form went nowhere even
+      // though the Product model declares `tags: [String]`.
+      tags: tags.length > 0 ? tags : undefined,
     }
 
     try {
@@ -231,6 +242,8 @@ const categories: CategoryItem[] =
       setUploadedFiles([])
       setBannerImage(null)
       setBannerPreview("")
+      setTags([])
+      setMinMaxTags([])
       setFormErrors({})
 
       // Navigate back after a short delay
@@ -713,6 +726,33 @@ const handleCreateCategory = () => {
                   Categories *
                 </Typography>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                    {/*
+                      These three states were previously indistinguishable. With
+                      no branching at all, a failed fetch rendered exactly the same
+                      empty box as a store that genuinely has no categories, which
+                      is why the missing route went unnoticed: the page reported
+                      "no categories" rather than "the category request 404'd".
+                    */}
+                    {isLoading && (
+                      <Typography variant="body2" color="text.secondary">
+                        Loading categories…
+                      </Typography>
+                    )}
+
+                    {!isLoading && error && (
+                      <Typography variant="body2" color="error">
+                        Could not load categories:{" "}
+                        {(error as Error)?.message ?? "request failed"}
+                      </Typography>
+                    )}
+
+                    {!isLoading && !error && categories.length === 0 && (
+                      <Typography variant="body2" color="text.secondary">
+                        No categories exist yet. Create one under Data Management →
+                        Categories, then reload this page.
+                      </Typography>
+                    )}
+
                     {categories.map((category) => (
                       <Box
                         key={category._id}
@@ -792,7 +832,9 @@ const handleCreateCategory = () => {
                       onDelete={() => handleRemoveTag(tag)}
                       deleteIcon={<CloseIcon style={{ fontSize: 14 }} />}
                       sx={{
-                        bgcolor: tag === "trend" ? "#f0f0f0" : "#e6e6fa",
+                        // Was `tag === "trend" ? "#f0f0f0" : "#e6e6fa"`, a
+                        // special case for one of the hardcoded demo tags.
+                        bgcolor: "#e6e6fa",
                         borderRadius: 0,
                       }}
                     />

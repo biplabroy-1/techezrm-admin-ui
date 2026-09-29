@@ -54,16 +54,19 @@ export * from './refundTransactions';
 //   SuppliersListResponse,
 // } from './suppliers';
 
-// export type {
-//   CreateProductRequest,
-//   Product,
-//   GetProductsParams,
-//   ProductResponse,
-//   ProductsResponse,
-//   ProductsListResponse,
-//   ApiResponse as ProductApiResponse,
-//   CreateProductFormData,
-// } from './products';
+// Restored. This whole block was commented out, so `@/api/services` exported no
+// product types at all, and the pages importing them failed to compile:
+//   inventory/add-product/page.tsx  TS2305: no exported member 'CreateProductFormData'
+//   inventory/update/Detail.tsx      TS2305: no exported member 'CreateProductRequest'
+// Only names that actually exist in ./products are listed - GetProductsParams,
+// ProductsResponse and ApiResponse never existed there and are not resurrected.
+export type {
+  Product,
+  CreateProductRequest,
+  CreateProductFormData,
+  ProductResponse,
+  ProductsListResponse,
+} from './products';
 export { supplierRefundTransactionsService } from './supplierRefundTransactions';
 export { customerAddressService } from './customerAddresses';
 export type {

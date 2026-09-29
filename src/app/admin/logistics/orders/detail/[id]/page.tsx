@@ -1,18 +1,20 @@
 import { OrderTrackingClient } from "./client"
 
-// Make the page component async
+// Next 15 made `params` a Promise. Reading `params.id` synchronously yields
+// undefined, so the guard below fired on every request and the page always
+// rendered "No order ID provided" instead of the tracker.
 export default async function OrderTrackingPage({
   params,
 }: {
-  params: { id: string }
-  searchParams?: { [key: string]: string | string[] | undefined }
+  params: Promise<{ id: string }>
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-  console.log("Params:", params) // Debug: Log params to verify id
+  const { id } = await params
 
-  if (!params.id) {
+  if (!id) {
     return <div>Error: No order ID provided</div>
   }
 
   // Pass the id to your client component
-  return <OrderTrackingClient id={params.id} />
+  return <OrderTrackingClient id={id} />
 }
