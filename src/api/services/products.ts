@@ -2,6 +2,13 @@
 import { api } from '../config';
 
 export interface Product {
+  /**
+   * Average rating from PUBLISHED reviews, aggregated server-side per listing
+   * request. `ratingCount` is 0 when the product has no published reviews, in
+   * which case `rating` is 0 and the UI should say so rather than show "0.0".
+   */
+  rating?: number;
+  ratingCount?: number;
   _id?: string;
   uniqueId?: string;
   seq?: number;

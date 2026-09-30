@@ -18,7 +18,7 @@ interface ProductRowData extends TableRowData {
   name: string
   description: string
   inventory: string
-  loreal: string
+  category: string
   price: string
   rating: string
 }
@@ -38,18 +38,28 @@ export default function UpdateList() {
   // Fetch products with current filters
   const { data: productsData, isLoading, error, isFetching } = useProducts(queryParams)
 
-  console.log("Products data:", productsData) // Debug log
-
   // Transform API data to table format
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const processRowData = (product: any): ProductRowData => ({
     id: product.id || product._id,
     name: `${product.name}`, // Combine name and description
     description: product.description,
-    inventory: product.inStock ? `${Math.floor(Math.random() * 100)} in stock` : "Out of Stock",
-    loreal: product.category,
+    // Product.inStock is a boolean; there is no quantity on the model, so the
+    // old `${Math.floor(Math.random() * 100)} in stock` invented a number that
+    // changed on every render and that no record supported.
+    inventory: product.inStock ? "In Stock" : "Out of Stock",
+    // Was `loreal: product.category` - a leftover field name from a template
+    // that also passed the whole populated category OBJECT into a table cell,
+    // so it rendered as the string "[object Object]".
+    category: product.category?.name ?? "Uncategorized",
     price: `$${product.price.toFixed(2)}`,
-    rating: product.inStock ? "5.0 (32 Votes)" : "4.5 (12 Votes)", // Mock rating data
+    // Real average from published reviews, aggregated server-side. This was a
+    // literal "5.0 (32 Votes)" / "4.5 (12 Votes)" chosen by whether the product
+    // happened to be in stock - the two columns were inversely related fictions.
+    rating:
+      product.ratingCount > 0
+        ? `${product.rating.toFixed(1)} (${product.ratingCount} vote${product.ratingCount === 1 ? "" : "s"})`
+        : "No reviews",
   })
 
   const tableData: ProductRowData[] = productsData?.products?.map(processRowData) || []
@@ -57,7 +67,7 @@ export default function UpdateList() {
   const columns = [
     { id: "name", label: "Product", width: "25%" },
     { id: "inventory", label: "Inventory", width: "20%" },
-    { id: "loreal", label: "Category", width: "20%" },
+    { id: "category", label: "Category", width: "20%" },
     { id: "price", label: "Price", width: "15%" },
     { id: "rating", label: "Rating", width: "15%" },
   ]

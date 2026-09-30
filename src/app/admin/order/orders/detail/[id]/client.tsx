@@ -122,7 +122,10 @@ export function OrderTrackingClient({ id }: OrderTrackingClientProps) {
     { id: 'price', label: 'Price', width: '25%', align: 'right' },
   ];
 
-  // Mock data for other customer orders (you can replace this with another API call)
+  // This was commented "Mock data for other customer orders" and read as invented
+  // data. It is not: it maps the CURRENT order, which comes from the API, into a
+  // one-row table. The comment was simply wrong, and it obscured the real gap -
+  // there is no "other orders" request here.
   const customerOrdersData: TableRowData[] = [
     {
       id: '1',

@@ -20,7 +20,7 @@ interface TableRowData {
 interface ProductRow extends TableRowData {
   product: string
   inventory: string
-  loreal: string
+  category: string
   price: string
   rating: string
 }
@@ -43,7 +43,7 @@ export default function DeleteProductPage() {
   const columns = [
     { id: "product", label: "Product", width: "30%" },
     { id: "inventory", label: "Inventory", width: "20%" },
-    { id: "loreal", label: "Category", width: "20%" },
+    { id: "category", label: "Category", width: "20%" },
     { id: "price", label: "Price", width: "15%" },
     { id: "rating", label: "Stock Status", width: "10%" },
   ]
@@ -56,8 +56,13 @@ export default function DeleteProductPage() {
         return {
           id: productId,
           product: product.name,
-          inventory: `${Math.floor(Math.random() * 100)} in stock`,
-          loreal: product.category,
+          // Two defects, identical to inventory/update/List.tsx: a random
+          // inventory number that changed every render and corresponded to no
+          // record (Product has an inStock boolean, no quantity), and the
+          // populated category object dumped straight into a cell, which
+          // rendered as the string "[object Object]".
+          inventory: product.inStock ? "In Stock" : "Out of Stock",
+          category: product.category?.name ?? "Uncategorized",
           price: `$${product.price.toFixed(2)}`,
           rating: product.inStock ? "In Stock" : "Out of Stock",
         }
