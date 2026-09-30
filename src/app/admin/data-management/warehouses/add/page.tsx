@@ -236,7 +236,7 @@ export default function AddWarehousePage() {
           Back to Warehouses
         </Button>
 
-        <Typography variant="h5" sx={{ fontWeight: 600, mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 600, mb: 3,color: 'text.primary' }}>
           Add Warehouse
         </Typography>
 
