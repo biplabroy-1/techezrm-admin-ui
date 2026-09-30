@@ -654,7 +654,13 @@ export default function ProductDetailsModal({
                     variant="body1"
                     sx={{ fontWeight: 500, fontFamily: 'monospace' }}
                   >
-                    {product?._id || 'N/A'}
+                    {/* The human-facing identifier (EZ-PI-00001), not the
+                        Mongo ObjectId. The modal already used uniqueId
+                        elsewhere (the header and the variant table), so showing
+                        the raw _id here was inconsistent as well as ugly - and
+                        the _id is what customers end up quoting in support
+                        threads. */}
+                    {product?.uniqueId || 'N/A'}
                   </Typography>
                 </Box>
               </Grid>
