@@ -63,6 +63,15 @@ export interface GetOrdersParams {
   limit?: number
   search?: string
   status?: string
+  /**
+   * One status, or several as a comma-separated list. The server accepts both and
+   * turns a multi-value filter into `$in`.
+   *
+   * The admin payments screen needs this: its "Pending" tab is really
+   * pending + processing + failed, and "Completed" is completed + refunded. It
+   * previously had no server-side filter at all and was fed hardcoded rows.
+   */
+  paymentStatus?: string | string[]
   sortBy?: string
   sortOrder?: "asc" | "desc"
 }
@@ -102,7 +111,7 @@ export interface SingleOrderApiResponse {
 export const ordersService = {
   // Get customer orders with proper typing
   getOrders: async ({ queryKey }: { queryKey: [string, GetOrdersParams] }): Promise<OrdersResponse> => {
-    const [, { page = 1, limit = 10, search, status }] = queryKey
+    const [, { page = 1, limit = 10, search, status, paymentStatus }] = queryKey
 
     // Build params object
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -113,6 +122,12 @@ export const ordersService = {
 
     if (search) params.search = search
     if (status) params.status = status
+
+  if (paymentStatus) {
+    params.paymentStatus = Array.isArray(paymentStatus)
+      ? paymentStatus.join(",")
+      : paymentStatus
+  }
 
     try {
       const { data } = await api.get(`${ENDPOINTS.ORDERS.GET}`, {

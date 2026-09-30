@@ -5,12 +5,26 @@ import type { GetOrdersParams } from "../services/orders"
 export const useOrders = ({
   page = 1,
   limit = 10,
-
-  // sortBy = "createdAt",
-  // sortOrder = "desc" as "asc" | "desc",
+  search,
+  status,
+  paymentStatus,
 }: GetOrdersParams = {}) => {
   return useQuery({
-    queryKey: ["orders", { page, limit }] as const,
+    // Every value the request depends on has to be in the key, or switching tabs
+    // shows the previous tab's cached rows. paymentStatus is what separates the
+    // Pending and Completed tabs here.
+    queryKey: [
+      "orders",
+      {
+        page,
+        limit,
+        search,
+        status,
+        paymentStatus: Array.isArray(paymentStatus)
+          ? paymentStatus.join(",")
+          : paymentStatus,
+      },
+    ] as const,
     queryFn: ordersService.getOrders,
     staleTime: 5 * 60 * 1000, // 5 minutes
     placeholderData: keepPreviousData,
