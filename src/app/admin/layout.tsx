@@ -94,21 +94,11 @@ const sidebarItems: SidebarItem[] = [
     icon: '/logistics.png',
     hasDropdown: true,
     options: [
-      {
-        text: 'Payment Management',
-        path: '/admin/logistics/payment-management',
-        hasNestedDropdown: true,
-        nestedOptions: [
-          {
-            text: 'Pending/Completed Payment',
-            path: '/admin/logistics/payment-management/payment',
-          },
-          {
-            text: 'Refund',
-            path: '/admin/logistics/payment-management/refund',
-          },
-        ],
-      },
+      // "Payment Management" was removed from this menu. It pointed at
+      // /admin/logistics/payment-management, which was a second, independent copy
+      // of /admin/payments - the same screens, a second time in the nav, and
+      // originally with its own hardcoded mock payments. Payments and Refunds now
+      // live only under "Payments" in the menu above.
       {
         text: 'Warehouse',
         path: '/admin/logistics/warehouse',
@@ -202,7 +192,6 @@ export default function AdminLayout({
   // State for nested dropdowns
   const [openNestedDropdowns, setOpenNestedDropdowns] =
     useState<NestedDropdownState>({
-      'Payment Management': false,
       Warehouse: false,
     });
 
@@ -280,12 +269,7 @@ export default function AdminLayout({
       setOpenDropdowns((prev) => ({ ...prev, Logistics: true }));
 
       // Auto open nested dropdown if on a nested path
-      if (pathname.startsWith('/admin/logistics/payment-management/')) {
-        setOpenNestedDropdowns((prev) => ({
-          ...prev,
-          'Payment Management': true,
-        }));
-      } else if (pathname.startsWith('/admin/logistics/warehouse/')) {
+      if (pathname.startsWith('/admin/logistics/warehouse/')) {
         setOpenNestedDropdowns((prev) => ({ ...prev, Warehouse: true }));
       }
     }
@@ -318,7 +302,6 @@ export default function AdminLayout({
     // Reset nested dropdowns when closing parent or switching to different parent
     if (openDropdowns[dropdownName] || dropdownName !== 'Logistics') {
       setOpenNestedDropdowns({
-        'Payment Management': false,
         Warehouse: false,
       });
     }
