@@ -14,7 +14,9 @@ function DetailPageContent() {
     name: searchParams.get('name') || '',
     description: searchParams.get('description') || '',
     inventory: searchParams.get('inventory') || '',
-    loreal: searchParams.get('loreal') || '',
+    // Was `loreal` - a Lorem Ipsum template leftover the list fed with the
+    // literal strings "Black"/"White". Now carries the real quality value.
+    quality: searchParams.get('quality') || '',
     price: searchParams.get('price') || '',
     rating: searchParams.get('rating') || '',
   };

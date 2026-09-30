@@ -107,7 +107,7 @@ interface Product {
   name: string
   description: string
   inventory: string
-  loreal: string
+  quality: string
   price: string
   rating: string
 }

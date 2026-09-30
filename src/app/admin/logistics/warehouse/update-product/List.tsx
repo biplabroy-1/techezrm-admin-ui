@@ -1,200 +1,122 @@
-"use client"
+'use client';
 
-import React, { useState } from "react"
+import React, { useMemo, useState } from "react"
 import { Box, Typography } from "@mui/material"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { TableComponent } from "../../../../../components/TableComponent"
-
-// Define the base TableRowData interface that matches what TableComponent expects
-interface TableRowData {
-  id: string
-  [key: string]: string | number | boolean | null | undefined | React.ReactNode
-}
+import { useQuery } from "@tanstack/react-query"
+import { TableComponent, TableRowData } from "../../../../../components/TableComponent"
+import { warehouseStockService } from "@/api/services/warehouseStock"
 
 // ProductRowData extends TableRowData
 interface ProductRowData extends TableRowData {
   name: string
-  description: string
   inventory: string
-  loreal: string
+  category: string
   price: string
-  rating: string
+  quality: string
 }
 
+/**
+ * Warehouse stock list.
+ *
+ * This page previously rendered ten hardcoded rows - `description: "loreal
+ * ipsum"`, `loreal: "Black"` - with no API call whatsoever, and started on page 2
+ * for no reason. It is linked from the admin nav, so it showed fabricated stock
+ * to anyone who opened it.
+ *
+ * It now reads GET /private/warehouse-stock, the same data the transfer
+ * endpoints operate on. The `loreal` column, another template leftover, is gone;
+ * it was rendering the literal strings "Black"/"White" from the old fixture.
+ */
 export default function UpdateList() {
   const router = useRouter()
   const [filter, setFilter] = useState("")
-  const [page, setPage] = useState(2)
+  const [page, setPage] = useState(1)
 
-  const rawData = [
-    {
-      id: "1",
-      name: "vitamin",
-      description: "loreal ipsum",
-      inventory: "96 in stock",
-      loreal: "Black",
-      price: "$49.90",
-      rating: "5.0 (32 Votes)",
-    },
-    {
-      id: "2",
-      name: "vitamin",
-      description: "loreal ipsum",
-      inventory: "56 in stock",
-      loreal: "White",
-      price: "$34.90",
-      rating: "4.8 (24 Votes)",
-    },
-    {
-      id: "3",
-      name: "vitamin",
-      description: "loreal ipsum",
-      inventory: "78 in stock",
-      loreal: "White",
-      price: "$40.90",
-      rating: "5.0 (54 Votes)",
-    },
-    {
-      id: "4",
-      name: "vitamin",
-      description: "loreal ipsum",
-      inventory: "32 in stock",
-      loreal: "White",
-      price: "$49.90",
-      rating: "4.5 (31 Votes)",
-    },
-    {
-      id: "5",
-      name: "vitamin",
-      description: "loreal ipsum",
-      inventory: "32 in stock",
-      loreal: "White",
-      price: "$34.90",
-      rating: "4.9 (22 Votes)",
-    },
-    {
-      id: "6",
-      name: "vitamin",
-      description: "loreal ipsum",
-      inventory: "96 in stock",
-      loreal: "Black",
-      price: "$49.90",
-      rating: "5.0 (32 Votes)",
-    },
-    {
-      id: "7",
-      name: "vitamin",
-      description: "loreal ipsum",
-      inventory: "56 in stock",
-      loreal: "White",
-      price: "$34.90",
-      rating: "4.8 (24 Votes)",
-    },
-    {
-      id: "8",
-      name: "vitamin",
-      description: "loreal ipsum",
-      inventory: "Out of Stock",
-      loreal: "White",
-      price: "$40.90",
-      rating: "5.0 (54 Votes)",
-    },
-    {
-      id: "9",
-      name: "vitamin",
-      description: "loreal ipsum",
-      inventory: "Out of Stock",
-      loreal: "White",
-      price: "$49.90",
-      rating: "4.5 (31 Votes)",
-    },
-    {
-      id: "10",
-      name: "vitamin",
-      description: "loreal ipsum",
-      inventory: "Out of Stock",
-      loreal: "White",
-      price: "$34.90",
-      rating: "4.9 (22 Votes)",
-    },
-  ]
-
-  const processRowData = (row: (typeof rawData)[0]): ProductRowData => ({
-    ...row,
-    name: `${row.name} - ${row.description}`, // Combine name and description as a string
-    rating: row.rating, // Use the raw string value
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["warehouseStock", page],
+    queryFn: () => warehouseStockService.getWarehouseStock({ page, limit: 9 }),
   })
 
-  const tableData: ProductRowData[] = rawData.map(processRowData)
-  const totalResults = 146
+  // Verified shape: { success, data: WarehouseStock[], page, limit, total, totalPages }.
+  const rows: any[] = useMemo(() => (Array.isArray(data?.data) ? data.data : []), [data])
+
+  const tableData: ProductRowData[] = rows.map((s: any) => {
+    const p = s.productId ?? s.product
+    const name = typeof p === "object" && p ? p.name : p?.name ?? "Unknown product"
+    const total = s.quantityTotal ?? 0
+    const reserved = s.quantityReserved ?? 0
+    return {
+      id: s._id ?? s.id,
+      name: String(name ?? "Unknown product"),
+      // Real figures from the record. Previously this column read
+      // `${Math.floor(Math.random() * 100)} in stock` on the sibling inventory
+      // page, and here it read a hardcoded "In Stock"/"Out of Stock".
+      inventory: `${total - reserved} available (${total} total)`,
+      category: typeof p === "object" && p?.category ? String(p.category.name ?? "") : "-",
+      price: p && typeof p === "object" && p.price != null ? `$${Number(p.price).toFixed(2)}` : "-",
+      quality: s.qcPassed === false ? "QC failed" : s.qcPassed === true ? "QC passed" : "-",
+    }
+  })
 
   const columns = [
-    { id: "name", label: "Product", width: "25%" },
-    { id: "inventory", label: "Inventory", width: "20%" },
-    { id: "loreal", label: "Loreal", width: "20%" },
-    { id: "price", label: "Price", width: "15%" },
-    { id: "rating", label: "Rating", width: "15%" },
+    { id: "name", label: "Product", width: "30%" },
+    { id: "inventory", label: "Inventory", width: "25%" },
+    { id: "category", label: "Category", width: "20%" },
+    { id: "quality", label: "Quality", width: "15%" },
+    { id: "price", label: "Price", width: "10%" },
   ]
 
   const filterOptions = {
     value: filter,
-    onChange: setFilter,
+    onChange: (e: { target: { value: string } }) => setFilter(e.target.value),
     options: [
-      { value: "Product ID", label: "Product ID" },
-      { value: "Product Name", label: "Product Name" },
-      { value: "Category", label: "Category" },
+      { value: "", label: "All Quality" },
+      { value: "QC passed", label: "QC passed" },
+      { value: "QC failed", label: "QC failed" },
     ],
   }
 
-  const handlePageChange = (page: number) => {
-    setPage(page)
-  }
-
+  // TableRowData, not ProductRowData: onRowClick is typed (row: TableRowData)
+  // => void, and a handler taking the narrower type is not assignable.
   const handleRowClick = (row: TableRowData) => {
-    const productRow = row as ProductRowData
-
-    const query = new URLSearchParams({
-      id: productRow.id,
-      name: productRow.name,
-      description: productRow.description,
-      inventory: productRow.inventory,
-      loreal: productRow.loreal,
-      price: productRow.price,
-      rating: productRow.rating,
-    }).toString()
-
-    router.push(`/admin/logistics/warehouse/update-product/detail?${query}`)
+    router.push(
+      `/admin/logistics/warehouse/update-product/detail?id=${row.id}&name=${encodeURIComponent(String(row.name))}&inventory=${encodeURIComponent(String(row.inventory ?? ""))}`
+    )
   }
 
   return (
-    <Box sx={{ p: 1, backgroundColor: "#F9FAFB", minHeight: "85vh", fontFamily: "Poppins, sans-serif" }}>
-      <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
-        <Box sx={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => router.back()}>
-          <Image src="/backArrow.png" alt="Back" width={13} height={13} />
-          <Typography sx={{ ml: 1, color: "#737791", fontSize: "14px", fontFamily: "Poppins, sans-serif" }}>
-            Back
-          </Typography>
-        </Box>
-      </Box>
-      <Typography
-        sx={{ fontSize: "24px", fontWeight: "bold", color: "#1F2A44", mb: 2, fontFamily: "Poppins, sans-serif" }}
-      >
-        Update Product
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h5" sx={{ fontWeight: 600, mb: 3 }}>
+        Warehouse Stock
       </Typography>
 
-      <TableComponent
-        columns={columns}
-        data={tableData}
-        totalResults={totalResults}
-        currentPage={page}
-        onPageChange={handlePageChange}
-        onRowClick={handleRowClick}
-        filterOptions={filterOptions}
-        showCheckboxes={true}
-        showHeader={true}
-        rowsPerPage={9}
-      />
+      {isLoading ? (
+        <Typography>Loading stock...</Typography>
+      ) : error ? (
+        <Typography color="error">
+          Could not load warehouse stock: {(error as any)?.message || "Unknown error"}
+        </Typography>
+      ) : (
+        <TableComponent
+          columns={columns}
+          data={tableData}
+          totalResults={data?.total ?? tableData.length}
+          currentPage={page}
+          onPageChange={setPage}
+          onRowClick={handleRowClick}
+          showCheckboxes={false}
+          showHeader={true}
+          rowsPerPage={9}
+          searchOptions={{
+            value: filter,
+            onChange: setFilter,
+            placeholder: "Search stock...",
+          }}
+          filterOptions={filterOptions as any}
+        />
+      )}
     </Box>
   )
 }
