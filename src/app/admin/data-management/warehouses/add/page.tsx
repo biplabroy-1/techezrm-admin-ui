@@ -19,6 +19,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import MyLocationIcon from '@mui/icons-material/MyLocation';
 import { warehouseService } from '@/api/services/warehouses';
 import { toast } from 'react-toastify';
 
@@ -78,6 +79,7 @@ export default function AddWarehousePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  const [locating, setLocating] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
 
   const handleChange =
@@ -151,6 +153,47 @@ export default function AddWarehousePage() {
       toast.error(error?.message || 'Failed to create warehouse');
     },
   });
+
+  /**
+   * Fill latitude/longitude from the browser's location.
+   *
+   * Every failure mode gets a distinct message, because they need different
+   * actions: an insecure origin and a denied permission both surface as an
+   * opaque `code 1` in some browsers, and "unavailable" is usually just "no
+   * GPS indoors". Geolocation is only exposed on a secure origin, so this works
+   * on localhost and over HTTPS but not on a plain-HTTP LAN address.
+   */
+  const useCurrentLocation = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      toast.error('This browser cannot detect your location.');
+      return;
+    }
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false);
+        setForm((prev) => ({
+          ...prev,
+          latitude: position.coords.latitude.toFixed(6),
+          longitude: position.coords.longitude.toFixed(6),
+        }));
+        setErrors((prev) => ({ ...prev, latitude: '', longitude: '' }));
+        toast.success('Location filled in from your device.');
+      },
+      (error) => {
+        setLocating(false);
+        const message =
+          error.code === error.PERMISSION_DENIED
+            ? 'Location permission denied. Allow it in your browser, or type the coordinates in.'
+            : error.code === error.TIMEOUT
+              ? 'Timed out while getting your location. Try again, or type the coordinates in.'
+              : 'Could not determine your location. Type the coordinates in manually.';
+        toast.error(message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -318,6 +361,17 @@ export default function AddWarehousePage() {
                     error={Boolean(errors.zipCode)}
                     helperText={errors.zipCode}
                   />
+                </Grid>
+
+                <Grid size={{ xs: 12 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<MyLocationIcon />}
+                    onClick={useCurrentLocation}
+                    disabled={locating}
+                  >
+                    {locating ? 'Locating...' : 'Use current location'}
+                  </Button>
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>

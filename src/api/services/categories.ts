@@ -29,9 +29,20 @@ export interface CategoryResponse {
 export interface CategoriesListResponse {
   success: boolean;
   categories?: Category[];
-  total?: number;
-  page?: number;
-  limit?: number;
+  /**
+   * The count is NESTED here. GET /private/categories responds with
+   * { success, categories, pagination: { total, page, limit, ... } } and no
+   * top-level `total` - reading `data.total` silently yields 0, which is how the
+   * Categories listing came to show "0 Results" above a populated table.
+   */
+  pagination?: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
   message?: string;
   error?: string;
 }

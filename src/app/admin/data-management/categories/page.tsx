@@ -12,7 +12,6 @@ import {
   DialogContent,
   DialogActions,
   IconButton,
-  Chip,
 } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -33,7 +32,9 @@ interface CategoryRowData extends TableRowData {
   slug: string;
   description: string;
   status: string;
-  actions: string;
+  // The rendered action buttons. TableComponent renders a cell that is a
+  // React element directly, which is how every other listing page does this.
+  actions: React.ReactNode;
 }
 
 export default function CategoriesListing() {
@@ -80,64 +81,11 @@ export default function CategoriesListing() {
     },
   });
 
-  const categories = categoriesData?.categories || [];
-  const totalResults = categoriesData?.total || 0;
-
-  const categoryData: CategoryRowData[] = categories.map((category: any) => ({
-    id: category._id,
-    name: category.name,
-    slug: category.slug,
-    description: category.description || 'No description',
-    status: category.status || 'inactive',
-    actions: category._id,
-  }));
-
-  const columns = [
-    { id: 'name', label: 'Category Name', width: '25%' },
-    { id: 'slug', label: 'Slug', width: '20%' },
-    { id: 'description', label: 'Description', width: '35%' },
-    {
-      id: 'status',
-      label: 'Status',
-      width: '10%',
-      type: 'status' as const,
-      align: 'center' as const,
-    },
-    { id: 'actions', label: 'Actions', width: '10%', align: 'center' as const },
-  ];
-
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleRowClick = (row: CategoryRowData) => {
-    router.push(`/admin/data-management/categories/${row.id}`);
-  };
-
-  const handleAddCategory = () => {
-    router.push('/admin/data-management/categories/add');
-  };
-
-  const handleEditCategory = (categoryId: string) => {
-    router.push(`/admin/data-management/categories/${categoryId}/edit`);
-  };
-
-  const handleViewCategory = (categoryId: string) => {
-    router.push(`/admin/data-management/categories/${categoryId}`);
-  };
-
-  const handleDeleteCategory = (categoryId: string) => {
-    setCategoryToDelete(categoryId);
-    setDeleteDialogOpen(true);
-  };
-
-  const confirmDelete = () => {
-    if (categoryToDelete) {
-      deleteCategoryMutation.mutate(categoryToDelete);
-    }
-  };
-
-  const renderActions = (categoryId: string) => (
+  // Declared as a function (not a const arrow) and placed above `categoryData`
+  // because the row mapping below calls it during render: a const arrow in
+  // that position would be in its temporal dead zone and throw.
+  function renderActions(categoryId: string) {
+    return (
     <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
       <IconButton
         size="small"
@@ -170,7 +118,73 @@ export default function CategoriesListing() {
         <DeleteIcon fontSize="small" />
       </IconButton>
     </Box>
-  );
+    );
+  }
+
+  const categories = categoriesData?.categories || [];
+  // The API nests the count under `pagination` ({ success, categories,
+  // pagination: { total, page, limit, ... } }). This used to read a top-level
+  // `categoriesData?.total`, which does not exist, so the count was always 0
+  // even with rows on screen.
+  const totalResults = categoriesData?.pagination?.total ?? 0;
+
+  const categoryData: CategoryRowData[] = categories.map((category: any) => ({
+    id: category._id,
+    name: category.name,
+    slug: category.slug,
+    description: category.description || 'No description',
+    status: category.status || 'inactive',
+    actions: renderActions(category._id),
+  }));
+
+  const columns = [
+    { id: 'name', label: 'Category Name', width: '25%' },
+    { id: 'slug', label: 'Slug', width: '20%' },
+    { id: 'description', label: 'Description', width: '35%' },
+    {
+      id: 'status',
+      label: 'Status',
+      width: '10%',
+      type: 'status' as const,
+      align: 'center' as const,
+    },
+    { id: 'actions', label: 'Actions', width: '10%', align: 'center' as const },
+  ];
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+  };
+
+  // TableRowData, not CategoryRowData: onRowClick is declared as
+  // (row: TableRowData) => void, and CategoryRowData extends TableRowData, so
+  // a handler taking the narrower type is not assignable (contravariance).
+  const handleRowClick = (row: TableRowData) => {
+    router.push(`/admin/data-management/categories/${row.id}`);
+  };
+
+  const handleAddCategory = () => {
+    router.push('/admin/data-management/categories/add');
+  };
+
+  const handleEditCategory = (categoryId: string) => {
+    router.push(`/admin/data-management/categories/${categoryId}/edit`);
+  };
+
+  const handleViewCategory = (categoryId: string) => {
+    router.push(`/admin/data-management/categories/${categoryId}`);
+  };
+
+  const handleDeleteCategory = (categoryId: string) => {
+    setCategoryToDelete(categoryId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (categoryToDelete) {
+      deleteCategoryMutation.mutate(categoryToDelete);
+    }
+  };
+
 
   const statusOptions = [
     { value: '', label: 'All Status' },
@@ -253,21 +267,6 @@ export default function CategoriesListing() {
             value: '',
             onChange: () => {},
             options: statusOptions,
-          }}
-          renderCustomCell={(column, value, row) => {
-            if (column.id === 'actions') {
-              return renderActions(value);
-            }
-            if (column.id === 'status') {
-              return (
-                <Chip
-                  label={value}
-                  size="small"
-                  color={value === 'active' ? 'success' : 'default'}
-                />
-              );
-            }
-            return value;
           }}
         />
       )}

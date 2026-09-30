@@ -6,7 +6,11 @@ import { toast } from 'react-hot-toast';
 export const useCategories = (params = {}) => {
   return useQuery({
     queryKey: ['categories', params],
-    queryFn: () => categoryService.getCategories(),
+    // params was accepted and placed in the query key but never forwarded to
+    // the service, so page/search were silently dropped and every caller got
+    // page 1 unfiltered. Varying the key without varying the request is also a
+    // cache hazard: two callers with different params would share one result.
+    queryFn: () => categoryService.getCategories(params),
   });
 };
 
