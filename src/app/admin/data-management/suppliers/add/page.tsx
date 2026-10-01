@@ -135,7 +135,7 @@ export default function AddSupplierPage() {
   // latitude/longitude. Suppliers have no separate city/state/postcode fields, so
   // the geocoder's one-line formatted address is what lands in `address`. Only
   // empty fields are written.
-  const { locating, fill } = useFillFromLocation<FormState>();
+  const { busy, stage, fill } = useFillFromLocation<FormState>();
 
   const useCurrentLocation = async () => {
     await fill(form, {
@@ -260,10 +260,17 @@ export default function AddSupplierPage() {
                     variant="outlined"
                     startIcon={<MyLocationIcon />}
                     onClick={useCurrentLocation}
-                    disabled={locating}
+                    disabled={busy}
                     sx={{ textTransform: 'none' }}
                   >
-                    {locating ? 'Locating...' : 'Use current location to fill the address'}
+                    {busy ? (
+                      <>
+                        <CircularProgress size={16} sx={{ mr: 1, color: 'inherit' }} />
+                        {stage === 'gps' ? 'Getting your location...' : 'Looking up the address...'}
+                      </>
+                    ) : (
+                      'Use current location'
+                    )}
                   </Button>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>

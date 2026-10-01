@@ -118,7 +118,7 @@ export default function AddSupplierModal({
    * yet - if the geocoded country is not one of the listed options there is nothing
    * sensible to select, so that field is left alone for the user to pick.
    */
-  const { locating, fill } = useFillFromLocation<CreateSupplierRequest>();
+  const { busy, stage, fill } = useFillFromLocation<CreateSupplierRequest>();
 
   const useCurrentLocation = async () => {
     // `apply` is called once with the coordinates (as soon as the GPS fix lands) and
@@ -365,10 +365,17 @@ export default function AddSupplierModal({
                 size="small"
                 variant="outlined"
                 onClick={useCurrentLocation}
-                disabled={locating}
+                disabled={busy}
                 sx={{ textTransform: 'none', fontSize: '12px' }}
               >
-                {locating ? 'Locating...' : 'Use current location'}
+                {busy ? (
+                  <>
+                    <CircularProgress size={16} sx={{ mr: 1, color: 'inherit' }} />
+                    {stage === 'gps' ? 'Getting your location...' : 'Looking up the address...'}
+                  </>
+                ) : (
+                  'Use current location'
+                )}
               </Button>
             </Box>
             <Box sx={{ display: 'flex', gap: 2 }}>

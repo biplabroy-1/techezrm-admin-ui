@@ -60,20 +60,27 @@ export type AddressFieldMap<T> = Partial<
 /** Only the fields this action actually wrote. Spread into the form state. */
 export type FilledPatch<T> = Partial<T> & { latitude?: string; longitude?: string };
 
+/** Which part of the operation is in flight, for a meaningful loading label. */
+export type LocateStage = "gps" | "geocode" | null;
+
 export interface UseFillFromLocation<T extends Record<string, any>> {
-  locating: boolean;
+  /** True for the WHOLE operation, not just the GPS read. */
+  busy: boolean;
+  /** What the button should say while busy. */
+  stage: LocateStage;
   /**
-   * Fill this form's address fields, calling `apply` with each patch as it becomes
-   * known.
+   * Fill this form's address fields, calling `apply` ONCE with everything at the
+   * end.
    *
-   * `apply` is called up to TWICE, deliberately:
+   * One-shot on purpose. An earlier version applied the coordinates immediately and
+   * the address a second or two later, which looked like two separate actions and
+   * left the user watching fields fill in piecemeal with no indication anything was
+   * still happening. Now the form is left untouched until the whole thing is ready,
+   * and `busy` stays true throughout so the button can show progress.
    *
-   *   1. As soon as the GPS fix arrives, with latitude and longitude only. Those
-   *      two are known immediately and are certain, so they must not sit waiting
-   *      on a network call - an earlier version wrote everything only after the
-   *      geocode returned, so a slow provider left the form blank for seconds and a
-   *      user who closed the dialog lost coordinates that had already succeeded.
-   *   2. Again with the address fields, once reverse geocoding answers.
+   * The one exception: if reverse geocoding FAILS, the coordinates are still
+   * applied. They were obtained successfully, and discarding them would lose real
+   * data the user can see and correct.
    *
    * Never throws: a geolocation permission prompt is not an error a form should
    * surface as an exception, so every failure is reported via a toast.
@@ -93,7 +100,8 @@ const round6 = (n: number) => n.toFixed(6);
 const COORD_FIELDS = new Set(["latitude", "longitude"]);
 
 export function useFillFromLocation<T extends Record<string, any>>(): UseFillFromLocation<T> {
-  const [locating, setLocating] = useState(false);
+  const [stage, setStage] = useState<LocateStage>(null);
+  const busy = stage !== null;
 
   const fill = useCallback(
     async (
@@ -107,7 +115,7 @@ export function useFillFromLocation<T extends Record<string, any>>(): UseFillFro
         return false;
       }
 
-      setLocating(true);
+      setStage("gps");
       const position = await new Promise<GeolocationPosition | null>((resolve) => {
         navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), {
           enableHighAccuracy: true,
@@ -117,7 +125,7 @@ export function useFillFromLocation<T extends Record<string, any>>(): UseFillFro
       });
 
       if (!position) {
-        setLocating(false);
+        setStage(null);
         // Permission denied, timed out, or no fix available indoors all surface as
         // an opaque failure here. Distinguishing them needs the error object, which
         // this promise shape discarded, so the message covers all three honestly
@@ -130,14 +138,13 @@ export function useFillFromLocation<T extends Record<string, any>>(): UseFillFro
 
       const lat = round6(position.coords.latitude);
       const lng = round6(position.coords.longitude);
-      setLocating(false);
 
       // Apply the coordinates straight away, before the network call below.
       const coordPatch: FilledPatch<T> = {};
       if (isEmpty(current.latitude)) coordPatch.latitude = lat as any;
       if (isEmpty(current.longitude)) coordPatch.longitude = lng as any;
       const coordKeys = Object.keys(coordPatch).length;
-      if (coordKeys) apply(coordPatch);
+      setStage("geocode");
 
       // ---- 2. coordinates into an address -------------------------------------
       let address: ReverseGeocodeAddress | null = null;
@@ -152,6 +159,8 @@ export function useFillFromLocation<T extends Record<string, any>>(): UseFillFro
 
       // ---- 3a. geocoding failed: keep the coordinates anyway -------------------
       if (!address) {
+        if (coordKeys) apply(coordPatch);
+        setStage(null);
         toast.error(
           coordKeys
             ? "Got your coordinates, but could not look up the address. The lat/lng were filled in - enter the rest manually."
@@ -180,11 +189,13 @@ export function useFillFromLocation<T extends Record<string, any>>(): UseFillFro
 
       const filledCount = Object.keys(patch).length;
       if (!filledCount) {
+        setStage(null);
         if (!coordKeys) toast.error("Could not fill anything - those fields already have values.");
         return coordKeys > 0;
       }
 
-      apply(patch as FilledPatch<T>);
+      apply({ ...coordPatch, ...patch } as FilledPatch<T>);
+      setStage(null);
       const bits = [`Filled ${filledCount} field${filledCount === 1 ? "" : "s"}`];
       if (skipped.length) {
         bits.push(`kept your ${skipped.length} existing value${skipped.length === 1 ? "" : "s"}`);
@@ -195,7 +206,7 @@ export function useFillFromLocation<T extends Record<string, any>>(): UseFillFro
     []
   );
 
-  return { locating, fill };
+  return { busy, stage, fill };
 }
 
 /** An absent field, or one holding only whitespace, counts as empty. */

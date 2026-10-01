@@ -147,7 +147,7 @@ export default function EditWarehousePage() {
   // Fills street, city, state, country and zipCode from the device's GPS fix.
   // Only empty fields are written, so an address already on file is not silently
   // replaced because the fix landed in a different administrative boundary.
-  const { locating, fill } = useFillFromLocation<FormState>();
+  const { busy, stage, fill } = useFillFromLocation<FormState>();
 
   const useCurrentLocation = async () => {
     await fill(form, {
@@ -291,10 +291,17 @@ export default function EditWarehousePage() {
                     variant="outlined"
                     startIcon={<MyLocationIcon />}
                     onClick={useCurrentLocation}
-                    disabled={locating}
+                    disabled={busy}
                     sx={{ textTransform: 'none' }}
                   >
-                    {locating ? 'Locating...' : 'Use current location to fill the address'}
+                    {busy ? (
+                      <>
+                        <CircularProgress size={16} sx={{ mr: 1, color: 'inherit' }} />
+                        {stage === 'gps' ? 'Getting your location...' : 'Looking up the address...'}
+                      </>
+                    ) : (
+                      'Use current location'
+                    )}
                   </Button>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>

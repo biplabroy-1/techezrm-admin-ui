@@ -166,7 +166,7 @@ export default function AddWarehousePage() {
 
   // Fills street, city, state, country and zipCode from the device's GPS fix.
   // Only empty fields are written, so anything typed already is kept.
-  const { locating, fill } = useFillFromLocation<FormState>();
+  const { busy, stage, fill } = useFillFromLocation<FormState>();
 
   const useCurrentLocation = async () => {
     await fill(form, {
@@ -360,9 +360,16 @@ export default function AddWarehousePage() {
                     variant="outlined"
                     startIcon={<MyLocationIcon />}
                     onClick={useCurrentLocation}
-                    disabled={locating}
+                    disabled={busy}
                   >
-                    {locating ? 'Locating...' : 'Use current location'}
+                    {busy ? (
+                      <>
+                        <CircularProgress size={16} sx={{ mr: 1, color: 'inherit' }} />
+                        {stage === 'gps' ? 'Getting your location...' : 'Looking up the address...'}
+                      </>
+                    ) : (
+                      'Use current location'
+                    )}
                   </Button>
                 </Grid>
 
