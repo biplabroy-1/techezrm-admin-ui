@@ -424,9 +424,18 @@ export default function AddPurchaseOrder() {
   const handleSupplierAdded = (newSupplier: any) => {
     // Refresh suppliers list
     refetchSuppliers();
-    // Set the newly added supplier as selected
-    if (newSupplier?.id) {
-      handleInputChange('supplier_id', newSupplier.id);
+    // Set the newly added supplier as selected.
+    //
+    // Two bugs here. It read `newSupplier.id`, but the API returns the mongoose
+    // document, whose identifier is `_id` - so the condition was never true and the
+    // supplier was created without ever being selected. And it then set only
+    // `supplier_id`, while the ReactSelect renders `formData.supplier`, an object of
+    // { value, label }; the dropdown's displayed value is bound to that object, so
+    // it would still have read "Select Supplier" even with the correct id.
+    const newId = newSupplier?._id ?? newSupplier?.id;
+    if (newId) {
+      handleInputChange('supplier_id', newId);
+      handleInputChange('supplier', { value: newId, label: newSupplier?.name ?? '' });
     }
     setShowAddSupplierModal(false);
   };

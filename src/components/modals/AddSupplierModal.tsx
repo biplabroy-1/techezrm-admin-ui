@@ -94,11 +94,63 @@ export default function AddSupplierModal({
     email: '',
     phone: '',
     address: '',
-    payment_method: '',
+    latitude: '',
+    longitude: '',
+    // Preselect the first option. Leaving this empty meant a user who filled in
+    // every visible field still got "Payment method is required" and the submit
+    // silently did nothing - the only clue was a caption under a dropdown they had
+    // no reason to think was mandatory. The dedicated suppliers/add page hit exactly
+    // this and fixed it there; this modal had the same defect.
+    payment_method: SUPPLIER_PAYMENT_METHODS[0],
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  /**
+   * Fill the coordinates from the browser's geolocation.
+   *
+   * Mirrors the warehouse form's affordance, for the same reason: making someone
+   * type a latitude by hand is a poor way to record where their own supplier is.
+   *
+   * Every failure mode gets its own message, because they call for different
+   * actions - a denied permission and an unavailable fix are both an opaque
+   * `code 1` in some browsers, and "unavailable" usually just means no GPS
+   * indoors. Geolocation is only exposed on a secure origin, so this works on
+   * localhost and over HTTPS but not on a plain-HTTP LAN address.
+   */
+  const useCurrentLocation = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      toast.error('This browser cannot detect your location.');
+      return;
+    }
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false);
+        setFormData((prev) => ({
+          ...prev,
+          latitude: position.coords.latitude.toFixed(6),
+          longitude: position.coords.longitude.toFixed(6),
+        }));
+        setErrors((prev) => ({ ...prev, latitude: '', longitude: '' }));
+        toast.success('Location filled in from your device.');
+      },
+      (error) => {
+        setLocating(false);
+        const message =
+          error.code === error.PERMISSION_DENIED
+            ? 'Location permission denied. Allow it in your browser, or type the coordinates in.'
+            : error.code === error.TIMEOUT
+              ? 'Timed out while getting your location. Try again, or type the coordinates in.'
+              : 'Could not determine your location. Type the coordinates in manually.';
+        toast.error(message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -123,6 +175,22 @@ export default function AddSupplierModal({
 
     if (!formData.address.trim()) {
       newErrors.address = 'Address is required';
+    }
+
+    // The Supplier schema requires both coordinates, so this modal has to collect
+    // them too. It did not, and posted without them, so every submission from
+    // here failed with a raw validation error the user had no way to satisfy from
+    // the form. Caught client-side instead, with a field to fix.
+    if (!formData.latitude.trim()) {
+      newErrors.latitude = 'Latitude is required';
+    } else if (isNaN(parseFloat(formData.latitude))) {
+      newErrors.latitude = 'Latitude must be a number';
+    }
+
+    if (!formData.longitude.trim()) {
+      newErrors.longitude = 'Longitude is required';
+    } else if (isNaN(parseFloat(formData.longitude))) {
+      newErrors.longitude = 'Longitude must be a number';
     }
 
     if (!formData.payment_method) {
@@ -163,6 +231,8 @@ export default function AddSupplierModal({
       email: '',
       phone: '',
       address: '',
+      latitude: '',
+      longitude: '',
       payment_method: '',
     });
     setErrors({});
@@ -273,6 +343,54 @@ export default function AddSupplierModal({
               helperText={errors.address}
               placeholder="Enter complete address"
             />
+          </Box>
+
+          <Box>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 1,
+              }}
+            >
+              <Typography variant="body2" sx={{ color: '#666' }}>
+                Location *
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={useCurrentLocation}
+                disabled={locating}
+                sx={{ textTransform: 'none', fontSize: '12px' }}
+              >
+                {locating ? 'Locating...' : 'Use current location'}
+              </Button>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                fullWidth
+                variant="outlined"
+                size="small"
+                label="Latitude"
+                placeholder="-12.9716"
+                value={formData.latitude}
+                onChange={(e) => handleInputChange('latitude', e.target.value)}
+                error={!!errors.latitude}
+                helperText={errors.latitude}
+              />
+              <TextField
+                fullWidth
+                variant="outlined"
+                size="small"
+                label="Longitude"
+                placeholder="77.5946"
+                value={formData.longitude}
+                onChange={(e) => handleInputChange('longitude', e.target.value)}
+                error={!!errors.longitude}
+                helperText={errors.longitude}
+              />
+            </Box>
           </Box>
 
           <Box>

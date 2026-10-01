@@ -96,9 +96,14 @@ class SupplierService {
       const response = await api.post(this.baseUrl, data);
       return response.data;
     } catch (error: any) {
-      throw new Error(
-        error.response?.data?.message || 'Failed to create supplier'
-      );
+      // Keep the server's detail, not just its generic message. The API answers
+      // { message: "Error creating supplier", error: "Supplier validation failed:
+      // longitude: Path `longitude` is required." }. Throwing only `message`
+      // reduced that to "Error creating supplier", which names nothing the user
+      // can act on - the actual cause only ever appeared in the network tab.
+      const detail = error.response?.data?.error;
+      const summary = error.response?.data?.message || 'Failed to create supplier';
+      throw new Error(detail ? `${summary} - ${detail}` : summary);
     }
   }
 
