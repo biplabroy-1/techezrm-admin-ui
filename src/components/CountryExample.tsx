@@ -53,24 +53,24 @@ export default function CountryExample() {
             Country Details
           </Typography>
           <Typography>
-            <strong>Name:</strong> {selectedCountry.data?.name}
+            <strong>Name:</strong> {selectedCountry.data?.[0]?.name}
           </Typography>
           <Typography>
-            <strong>Code:</strong> {selectedCountry.data?.code}
+            <strong>Code:</strong> {selectedCountry.data?.[0]?.code}
           </Typography>
-          {selectedCountry.data?.phoneCode && (
+          {selectedCountry.data?.[0]?.phoneCode && (
             <Typography>
-              <strong>Phone Code:</strong> +{selectedCountry.data.phoneCode}
+              <strong>Phone Code:</strong> +{selectedCountry.data[0].phoneCode}
             </Typography>
           )}
-          {selectedCountry.data?.currency && (
+          {selectedCountry.data?.[0]?.currency && (
             <Typography>
-              <strong>Currency:</strong> {selectedCountry.data.currency}
+              <strong>Currency:</strong> {selectedCountry.data[0].currency}
             </Typography>
           )}
-          {selectedCountry.data?.timezone && (
+          {selectedCountry.data?.[0]?.timezone && (
             <Typography>
-              <strong>Timezone:</strong> {selectedCountry.data.timezone}
+              <strong>Timezone:</strong> {selectedCountry.data[0].timezone}
             </Typography>
           )}
         </Box>

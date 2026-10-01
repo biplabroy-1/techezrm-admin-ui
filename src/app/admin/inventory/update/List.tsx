@@ -90,7 +90,7 @@ export default function UpdateList() {
     const productRow = row as ProductRowData
 
     // Find the original product data to get all fields
-    const originalProduct = productsData?.products?.find((p) => (p.id || p._id) === productRow.id)
+    const originalProduct = productsData?.products?.find((p: any) => (p.id || p._id) === productRow.id)
 
     if (originalProduct) {
       const query = new URLSearchParams({

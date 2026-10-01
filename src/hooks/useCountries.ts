@@ -10,7 +10,7 @@ export const useCountries = (params = {}) => {
   });
 };
 
-export const useCountry = (code) => {
+export const useCountry = (code: string) => {
   return useQuery({
     queryKey: ['country', code],
     queryFn: () => countryService.getCountryByCode(code),

@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { categoryService } from '../api/services/categories';
+import {
+  categoryService,
+  CreateCategoryRequest,
+  CategoryResponse,
+} from '../api/services/categories';
 import { toast } from 'react-toastify';
 
 // Simple category queries
@@ -14,7 +18,7 @@ export const useCategories = (params = {}) => {
   });
 };
 
-export const useCategory = (id) => {
+export const useCategory = (id: string) => {
   return useQuery({
     queryKey: ['category', id],
     queryFn: () => categoryService.getCategoryById(id),
@@ -27,7 +31,8 @@ export const useCreateCategory = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data) => categoryService.createCategory(data),
+    mutationFn: (data: CreateCategoryRequest): Promise<CategoryResponse> =>
+      categoryService.createCategory(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       toast.success('Category created successfully!');
@@ -42,7 +47,13 @@ export const useUpdateCategory = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }) => categoryService.updateCategory(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<CreateCategoryRequest>;
+    }): Promise<CategoryResponse> => categoryService.updateCategory(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['category', id] });
@@ -58,7 +69,7 @@ export const useDeleteCategory = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id) => categoryService.deleteCategory(id),
+    mutationFn: (id: string): Promise<CategoryResponse> => categoryService.deleteCategory(id),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.removeQueries({ queryKey: ['category', id] });

@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { purchaseOrderService } from '../api/services/purchaseOrders';
+import {
+  purchaseOrderService,
+  CreatePurchaseOrderRequest,
+  PurchaseOrder,
+  PurchaseOrderResponse,
+  PurchaseOrderStatus,
+} from '../api/services/purchaseOrders';
 import { toast } from 'react-toastify';
 
 // Simple purchase order queries
@@ -10,7 +16,7 @@ export const usePurchaseOrders = (params = {}) => {
   });
 };
 
-export const usePurchaseOrder = (id) => {
+export const usePurchaseOrder = (id: string) => {
   return useQuery({
     queryKey: ['purchase-order', id],
     queryFn: () => purchaseOrderService.getPurchaseOrderById(id),
@@ -23,7 +29,8 @@ export const useCreatePurchaseOrder = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data) => purchaseOrderService.createPurchaseOrder(data),
+    mutationFn: (data: CreatePurchaseOrderRequest): Promise<PurchaseOrderResponse> =>
+      purchaseOrderService.createPurchaseOrder(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       toast.success('Purchase order created successfully!');
@@ -38,8 +45,13 @@ export const useUpdatePurchaseOrder = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }) =>
-      purchaseOrderService.updatePurchaseOrder(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<PurchaseOrder>;
+    }): Promise<PurchaseOrderResponse> => purchaseOrderService.updatePurchaseOrder(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-order', id] });
@@ -55,7 +67,8 @@ export const useDeletePurchaseOrder = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id) => purchaseOrderService.deletePurchaseOrder(id),
+    mutationFn: (id: string): Promise<PurchaseOrderResponse> =>
+      purchaseOrderService.deletePurchaseOrder(id),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.removeQueries({ queryKey: ['purchase-order', id] });
@@ -71,7 +84,13 @@ export const useUpdatePurchaseOrderStatus = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, status }) =>
+    mutationFn: ({
+      id,
+      status,
+    }: {
+      id: string;
+      status: PurchaseOrderStatus;
+    }): Promise<PurchaseOrderResponse> =>
       purchaseOrderService.updatePurchaseOrderStatus(id, status),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });

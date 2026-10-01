@@ -42,6 +42,9 @@ import { productService, supplierService, warehouseService } from '@/api';
 import { QueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import {
   CreatePurchaseOrderRequest,
+  PurchaseOrder,
+  PurchaseOrderItem,
+  PurchaseOrderStatus,
   purchaseOrderService,
 } from '@/api/services/purchaseOrders';
 import { toast } from 'react-toastify';
@@ -162,13 +165,46 @@ const theme = createTheme({
   },
 });
 
-enum PurchaseOrderStatus {
-  PENDING = 'pending',
-  // APPROVED = 'approved',
-  SHIPPED = 'shipped',
-  RECEIVED = 'received',
-  CANCELLED = 'cancelled',
-}
+// PurchaseOrderStatus comes from the service - see the import below. This file used
+// to declare its own copy with APPROVED commented out, which made
+// PurchaseOrderStatus.APPROVED undefined at runtime: the "Approved" option in the
+// status dropdown was written with value=undefined, and the
+// `formData.status === PurchaseOrderStatus.APPROVED` branch could never match.
+
+/**
+ * The form's own state: the API's PurchaseOrder, plus the display-only fields the
+ * selects are actually bound to.
+ *
+ * Each ReactSelect here takes `value={formData.<field>_option}` - an object of
+ * {value,label} - while the API only ever receives the bare scalar
+ * (`supplier_id`, `status`, `currency`). Both are kept: the scalar is what gets
+ * submitted, the object is what the dropdown displays. Without this the state was
+ * inferred from its initial value and every read of a display field was an error.
+ */
+type SelectOption = { value: string; label: string };
+
+/** A line item, plus the display object its product select is bound to. */
+type PurchaseOrderFormItem = PurchaseOrderItem & {
+  product_option?: SelectOption;
+};
+
+type PurchaseOrderFormData = Omit<
+  PurchaseOrder,
+  'items' | 'shipping_address' | 'status' | '_id' | 'id'
+> & {
+  status: PurchaseOrderStatus;
+  items: PurchaseOrderFormItem[];
+  shipping_address: NonNullable<PurchaseOrder['shipping_address']>;
+  /** Display-only companions. Never sent to the API. */
+  supplier?: SelectOption;
+  status_option?: SelectOption;
+  currency_option?: SelectOption;
+  warehouse_option?: SelectOption;
+  shipping_method_option?: SelectOption;
+  supplier_coordinates?: [number, number];
+  warehouse_coordinates?: [number, number];
+  warehouse_id?: string;
+};
 
 export default function AddPurchaseOrder() {
   const router = useRouter();
@@ -189,10 +225,12 @@ export default function AddPurchaseOrder() {
       // queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       return data;
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       console.log(error?.message, 'error');
 
-      toast.error(error?.error);
+      // The API rejects with `{ message, error }`; Error carries no `error` field,
+      // so this rendered "undefined" in the toast.
+      toast.error(error?.error ?? error?.message ?? 'Failed to create purchase order');
     },
   });
 
@@ -242,7 +280,7 @@ export default function AddPurchaseOrder() {
   const [showShippingCalculationModal, setShowShippingCalculationModal] =
     useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<PurchaseOrderFormData>({
     supplier_id: '',
     status: PurchaseOrderStatus.PENDING,
     total_amount: 0,
@@ -599,8 +637,8 @@ export default function AddPurchaseOrder() {
                                   if (selectedOption?.value === 'add_new') {
                                     setShowAddProductModal(true);
                                   } else {
-                                    const selectedProduct = products.find(
-                                      (p) => p.id === selectedOption?.value
+                                    const selectedProduct = (products as any[]).find(
+                                      (p: any) => p.id === selectedOption?.value
                                     );
                                     updateItem(
                                       index,

@@ -51,7 +51,7 @@ export default function DeleteProductPage() {
   // Transform API data to table format
   useEffect(() => {
     if (productsData?.products) {
-      const transformedData: ProductRow[] = productsData.products.map((product) => {
+      const transformedData: ProductRow[] = productsData.products.map((product: any) => {
         const productId = product.id || product._id
         return {
           id: productId,

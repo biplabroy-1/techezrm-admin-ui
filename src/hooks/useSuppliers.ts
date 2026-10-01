@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supplierService } from '../api/services/suppliers';
+import {
+  supplierService,
+  CreateSupplierRequest,
+  SupplierResponse,
+} from '../api/services/suppliers';
 import { toast } from 'react-toastify';
 
 // Simple supplier queries
@@ -23,7 +27,8 @@ export const useCreateSupplier = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data) => supplierService.createSupplier(data),
+    mutationFn: (data: CreateSupplierRequest): Promise<SupplierResponse> =>
+      supplierService.createSupplier(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       toast.success('Supplier created successfully!');
@@ -38,7 +43,13 @@ export const useUpdateSupplier = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }) => supplierService.updateSupplier(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<CreateSupplierRequest>;
+    }): Promise<SupplierResponse> => supplierService.updateSupplier(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.invalidateQueries({ queryKey: ['supplier', id] });
@@ -54,7 +65,7 @@ export const useDeleteSupplier = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id) => supplierService.deleteSupplier(id),
+    mutationFn: (id: string): Promise<SupplierResponse> => supplierService.deleteSupplier(id),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.removeQueries({ queryKey: ['supplier', id] });

@@ -106,21 +106,20 @@ const theme = createTheme({
   },
 })
 
-interface Product {
-  id: string
-  name: string
-  description: string
-  inventory: string
-  loreal: string
-  price: string
-  rating: string
-}
-
-interface DetailProps {
-  product?: Product
-}
-
-export default function Detail({ product }: DetailProps) {
+/**
+ * This is a ROUTE component, reached only by `router.push('/admin/inventory/add-product')`.
+ *
+ * It used to take a `product?: Product` prop, which is what broke the build. Next
+ * type-checks that a page's default export accepts exactly the router's
+ * { params, searchParams }; any extra prop fails with
+ * `Type "DetailProps" is not valid`, and its generated types said so plainly:
+ * `Type 'DetailProps' has no properties in common with type 'PageProps'`.
+ *
+ * Nothing ever passed the prop anyway - updating a product has its own form at
+ * inventory/update/Detail.tsx - so `product` was always undefined and the form always
+ * started empty, which is correct for "Add Product".
+ */
+export default function Detail() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bannerInputRef = useRef<HTMLInputElement>(null)
@@ -187,9 +186,9 @@ const categories: CategoryItem[] =
 
 
   const [formData, setFormData] = useState({
-    name: product?.name || "",
-    description: product?.description || "",
-    price: product?.price?.replace("$", "") || "",
+    name: "",
+    description: "",
+    price: "",
   })
 
   // Form validation

@@ -246,7 +246,7 @@ export default function ShippingCalculationModal({
 
           <Grid container spacing={2}>
             {/* From Coordinates */}
-            <Grid item xs={12} md={3}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <Typography variant="body2" sx={{ mb: 1, color: '#666' }}>
                 From Coordinates (Supplier)
               </Typography>
@@ -287,7 +287,7 @@ export default function ShippingCalculationModal({
             </Grid>
 
             {/* To Coordinates */}
-            <Grid item xs={12} md={3}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <Typography variant="body2" sx={{ mb: 1, color: '#666' }}>
                 To Coordinates (Warehouse)
               </Typography>
@@ -328,7 +328,7 @@ export default function ShippingCalculationModal({
             </Grid>
 
             {/* Shipping Type */}
-            <Grid item xs={12} md={2}>
+            <Grid size={{ xs: 12, md: 2 }}>
               <Typography variant="body2" sx={{ mb: 1, color: '#666' }}>
                 Shipping Type
               </Typography>
@@ -349,7 +349,7 @@ export default function ShippingCalculationModal({
             </Grid>
 
             {/* Container Type */}
-            <Grid item xs={12} md={2}>
+            <Grid size={{ xs: 12, md: 2 }}>
               <Typography variant="body2" sx={{ mb: 1, color: '#666' }}>
                 Container Type
               </Typography>
@@ -370,7 +370,7 @@ export default function ShippingCalculationModal({
             </Grid>
 
             {/* Date */}
-            <Grid item xs={12} md={2}>
+            <Grid size={{ xs: 12, md: 2 }}>
               <Typography variant="body2" sx={{ mb: 1, color: '#666' }}>
                 Shipping Date
               </Typography>

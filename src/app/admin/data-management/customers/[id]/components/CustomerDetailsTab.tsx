@@ -81,7 +81,7 @@ export default function CustomerDetailsTab({
     <Box sx={{ p: 2 }}>
       <Grid container spacing={3}>
         {/* Basic Information Card */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card elevation={2}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -201,7 +201,7 @@ export default function CustomerDetailsTab({
         </Grid>
 
         {/* Company Information Card */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card elevation={2}>
             <CardContent>
               <Typography variant="h6" component="h3" gutterBottom>
@@ -308,7 +308,7 @@ export default function CustomerDetailsTab({
         {(customer.contactPerson ||
           customer.contactPersonEmail ||
           customer.contactPersonPhone) && (
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card elevation={2}>
               <CardContent>
                 <Typography variant="h6" component="h3" gutterBottom>
@@ -359,7 +359,7 @@ export default function CustomerDetailsTab({
 
         {/* Additional Notes */}
         {customer.notes && (
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Card elevation={2}>
               <CardContent>
                 <Typography variant="h6" component="h3" gutterBottom>
@@ -373,7 +373,7 @@ export default function CustomerDetailsTab({
         )}
 
         {/* Metadata */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Card elevation={2}>
             <CardContent>
               <Typography variant="h6" component="h3" gutterBottom>
@@ -381,7 +381,7 @@ export default function CustomerDetailsTab({
               </Typography>
               <Divider sx={{ my: 2 }} />
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography variant="body2" color="text.secondary">
                     Created At
                   </Typography>
@@ -389,7 +389,7 @@ export default function CustomerDetailsTab({
                     {formatDate(customer.createdAt)}
                   </Typography>
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography variant="body2" color="text.secondary">
                     Last Updated
                   </Typography>

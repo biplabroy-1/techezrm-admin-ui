@@ -119,7 +119,10 @@ export default function NotificationDropdown({
     queryFn: () => notificationService.getNotifications({ page, limit: 10 }),
     enabled: open,
   });
-const unreadCountData=0;
+// Typed as number, not left to infer the literal 0. With the const untyped, `0` was
+// narrowed to the literal type and `unreadCount !== 1` below became a comparison
+// between two literals, which tsc rejects as having no overlap.
+const unreadCountData: number = 0;
   // Fetch unread count
   // const { data: unreadCountData } = useQuery({
   //   queryKey: ['notifications-unread-count'],

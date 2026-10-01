@@ -121,7 +121,7 @@ export default function WishlistTab({ customerId }: WishlistTabProps) {
     <Box sx={{ p: 2 }}>
       {/* Wishlist Summary */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={4}>
+        <Grid size={{ xs: 12, sm: 4 }}>
           <Card elevation={2}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h4" color="error.main" gutterBottom>
@@ -133,7 +133,7 @@ export default function WishlistTab({ customerId }: WishlistTabProps) {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={4}>
+        <Grid size={{ xs: 12, sm: 4 }}>
           <Card elevation={2}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h4" color="success.main" gutterBottom>
@@ -145,7 +145,7 @@ export default function WishlistTab({ customerId }: WishlistTabProps) {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={4}>
+        <Grid size={{ xs: 12, sm: 4 }}>
           <Card elevation={2}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h4" color="info.main" gutterBottom>

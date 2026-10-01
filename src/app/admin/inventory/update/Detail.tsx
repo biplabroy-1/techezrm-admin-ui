@@ -108,7 +108,13 @@ const theme = createTheme({
   },
 })
 
-interface Product {
+/**
+ * The product as this form receives it: every field arrives as a query-string value,
+ * hence strings rather than the numbers and booleans the API's Product carries.
+ * Exported so the page that assembles it from searchParams is typed against this
+ * shape rather than the service's unrelated Product.
+ */
+export interface Product {
   id: string
   name: string
   description: string

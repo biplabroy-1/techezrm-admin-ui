@@ -213,7 +213,7 @@ export default function AddProductModal({
       <DialogContent>
         <Box sx={{ mt: 2 }}>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 fullWidth
                 label="Product Name"
@@ -224,7 +224,7 @@ export default function AddProductModal({
                 sx={{ mb: 2 }}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 fullWidth
                 label="Price"
@@ -236,7 +236,7 @@ export default function AddProductModal({
                 sx={{ mb: 2 }}
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <TextField
                 fullWidth
                 label="Description"
@@ -251,7 +251,7 @@ export default function AddProductModal({
                 sx={{ mb: 2 }}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <ReactSelect
                 options={categories}
                 value={categories.find(
@@ -270,7 +270,7 @@ export default function AddProductModal({
                 </Typography>
               )}
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <FormControlLabel
                 control={
                   <Switch

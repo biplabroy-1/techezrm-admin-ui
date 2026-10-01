@@ -180,7 +180,19 @@ export default function OrdersTab({ customerId }: OrdersTabProps) {
     );
   }
 
-  const orders = ordersData?.data?.orders || [];
+  // getCustomerOrders is typed `Promise<any>`, so `orders` was any[] and every
+  // reduce/filter/map callback parameter was an implicit any. These are the fields
+  // this tab actually reads.
+  type CustomerOrder = {
+    _id: string;
+    orderNumber?: string;
+    totalItems?: number;
+    totalAmount?: number;
+    status: string;
+    paymentStatus: string;
+    createdAt: string;
+  };
+  const orders: CustomerOrder[] = ordersData?.data?.orders || [];
   const totalOrders = ordersData?.data?.total || 0;
   const totalPages = ordersData?.data?.totalPages || 1;
 
@@ -199,7 +211,7 @@ export default function OrdersTab({ customerId }: OrdersTabProps) {
   }
 
   // Calculate summary statistics
-  const totalSpent = orders.reduce((sum, order) => sum + order.totalAmount, 0);
+  const totalSpent = orders.reduce((sum, order) => sum + (order.totalAmount ?? 0), 0);
   const completedOrders = orders.filter(
     (order) => order.status === 'delivered'
   ).length;
@@ -211,7 +223,7 @@ export default function OrdersTab({ customerId }: OrdersTabProps) {
     <Box sx={{ p: 2 }}>
       {/* Orders Summary */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={3}>
+        <Grid size={{ xs: 12, sm: 3 }}>
           <Card elevation={2}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h4" color="primary" gutterBottom>
@@ -223,7 +235,7 @@ export default function OrdersTab({ customerId }: OrdersTabProps) {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={3}>
+        <Grid size={{ xs: 12, sm: 3 }}>
           <Card elevation={2}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h4" color="success.main" gutterBottom>
@@ -235,7 +247,7 @@ export default function OrdersTab({ customerId }: OrdersTabProps) {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={3}>
+        <Grid size={{ xs: 12, sm: 3 }}>
           <Card elevation={2}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h4" color="info.main" gutterBottom>
@@ -247,7 +259,7 @@ export default function OrdersTab({ customerId }: OrdersTabProps) {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={3}>
+        <Grid size={{ xs: 12, sm: 3 }}>
           <Card elevation={2}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h4" color="warning.main" gutterBottom>
@@ -333,7 +345,7 @@ export default function OrdersTab({ customerId }: OrdersTabProps) {
                     </TableCell>
                     <TableCell align="center">
                       <Typography variant="body2">
-                        {formatDate(order.createdAt)}
+                        {formatDate(order.createdAt ?? '')}
                       </Typography>
                     </TableCell>
                     <TableCell align="center">
@@ -343,7 +355,7 @@ export default function OrdersTab({ customerId }: OrdersTabProps) {
                     </TableCell>
                     <TableCell align="center">
                       <Typography variant="subtitle2" color="success.main">
-                        {formatCurrency(order.totalAmount)}
+                        {formatCurrency(order.totalAmount ?? 0)}
                       </Typography>
                     </TableCell>
                     <TableCell align="center">

@@ -217,7 +217,7 @@ export default function AddressModal({
 
         <Grid container spacing={2}>
           {/* Address Type */}
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <FormControl fullWidth margin="normal">
               <InputLabel>Address Type</InputLabel>
               <Select
@@ -234,7 +234,7 @@ export default function AddressModal({
           </Grid>
 
           {/* Default Address Checkbox */}
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <FormControlLabel
               control={
                 <Checkbox
@@ -249,7 +249,7 @@ export default function AddressModal({
           </Grid>
 
           {/* Street Address */}
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Street Address"
@@ -263,7 +263,7 @@ export default function AddressModal({
           </Grid>
 
           {/* City */}
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="City"
@@ -277,7 +277,7 @@ export default function AddressModal({
           </Grid>
 
           {/* State */}
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="State/Province"
@@ -291,7 +291,7 @@ export default function AddressModal({
           </Grid>
 
           {/* Country */}
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Country"
@@ -305,7 +305,7 @@ export default function AddressModal({
           </Grid>
 
           {/* Zip Code */}
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Zip/Postal Code"

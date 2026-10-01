@@ -95,6 +95,7 @@ class ProductService {
   // Get all products
   async getProducts(params?: {
     page?: number;
+    limit?: number;
     search?: string;
     category?: string;
     status?: string;
@@ -103,6 +104,9 @@ class ProductService {
       const queryParams = new URLSearchParams();
       if (params?.page) {
         queryParams.append('page', params.page.toString());
+      }
+      if (params?.limit) {
+        queryParams.append('limit', params.limit.toString());
       }
       if (params?.search) {
         queryParams.append('search', params.search);

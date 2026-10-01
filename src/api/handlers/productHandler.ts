@@ -30,17 +30,30 @@ import { CreateProductRequest } from '../services/products';
 //   });
 // };
 
+/**
+ * Note there is a second `useProducts` in src/hooks/useProducts.ts. This is the one
+ * /admin/inventory/delete imports. It had the same defect: `limit` was accepted by
+ * callers and never declared here, so the requested page size was silently ignored.
+ */
 export const useProducts = ({
   page = 1,
+  limit = 10,
   search = '',
   category = '',
   status = '',
+}: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  category?: string;
+  status?: string;
 } = {}) => {
   return useQuery({
-    queryKey: ['products', { page, search, category, status }],
+    queryKey: ['products', { page, limit, search, category, status }],
     queryFn: () =>
       productService.getProducts({
         page,
+        limit,
         search,
         category,
         status,

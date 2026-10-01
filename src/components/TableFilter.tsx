@@ -50,7 +50,13 @@ interface DropdownField {
 interface DatePickerField {
   key: string;
   label?: string;
-  dateValue?: string;
+  /**
+   * Nullable, matching onDateChange below - which this component itself calls with
+   * `null` when the picker is cleared. `dateValue` was declared `string | undefined`
+   * while the setter accepted `string | null`, so no caller could satisfy both: the
+   * clear button was typed out of existence.
+   */
+  dateValue?: string | null;
   onDateChange?: (date: string | null) => void;
 }
 
@@ -58,8 +64,8 @@ interface DateRangePickerField {
   key: string;
   label?: string;
   dateRangeValue?: {
-    startDate: Date;
-    endDate: Date;
+    startDate: Date | null;
+    endDate: Date | null;
   };
   onDateRangeChange?: (range: any) => void;
 }
@@ -122,7 +128,10 @@ const TableFilter: React.FC<TableFilterProps> = ({
   const [staticSearchValues, setStaticSearchValues] = useState(
     staticSearch.reduce(
       (acc, item) => {
-        acc[item?.key] = item?.value || '';
+        // StaticSearchField declares no `value` - it is a filter definition, not a
+        // saved value. Reading one yielded undefined, so every seeded entry was
+        // "" anyway; say so directly.
+        acc[item?.key] = '';
         return acc;
       },
       {} as Record<string, string>
@@ -257,7 +266,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
       <Grid container spacing={2} columns={12}>
         {/* Google Places Autocomplete */}
         {searchPlace?.label && (
-          <Grid item xs={6} md={4} lg={2}>
+          <Grid size={{ xs: 6, md: 4, lg: 2 }}>
             <AddressAutocomplete
               label={searchPlace?.label}
               value={searchPlace?.value}
@@ -268,7 +277,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
 
         {/* Static Search Fields */}
         {staticSearch?.map((item) => (
-          <Grid item xs={5} md={5} lg={3} key={item?.key}>
+          <Grid size={{ xs: 5, md: 5, lg: 3 }} key={item?.key}>
             <Box
               sx={{
                 border: `1px solid ${colors.border}`,
@@ -324,7 +333,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
 
         {/* Search Inputs */}
         {search?.map((item) => (
-          <Grid item xs={6} md={4} lg={2} key={item?.key}>
+          <Grid size={{ xs: 6, md: 4, lg: 2 }} key={item?.key}>
             <TextField
               sx={commonTextFieldStyles}
               size="small"
@@ -353,7 +362,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
         {dropDowns?.map(
           (item) =>
             !item?.isHidden && (
-              <Grid item xs={6} md={4} lg={2} key={item?.key}>
+              <Grid size={{ xs: 6, md: 4, lg: 2 }} key={item?.key}>
                 <Select
                   onChange={item?.handleChange}
                   placeholder={item?.placeholder || 'Select'}
@@ -410,7 +419,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
 
         {/* Date Pickers */}
         {datePickers?.map((item) => (
-          <Grid item xs={6} md={4} lg={2} key={item?.key}>
+          <Grid size={{ xs: 6, md: 4, lg: 2 }} key={item?.key}>
             <DatePickerComponent
               value={item?.dateValue || null}
               onChange={(date) => item?.onDateChange?.(date)}
@@ -426,7 +435,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
 
         {/* Date Range Picker */}
         {dateRangePickers?.map((dateRangePicker, index) => (
-          <Grid item xs={6} md={4} lg={3} key={index}>
+          <Grid size={{ xs: 6, md: 4, lg: 3 }} key={index}>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <TextField
                 size="small"
@@ -479,7 +488,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
         ))}
 
         {/* Reset Button */}
-        <Grid item xs={4} md={3} lg={1}>
+        <Grid size={{ xs: 4, md: 3, lg: 1 }}>
           <Button
             variant="outlined"
             sx={{
@@ -506,7 +515,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
         </Grid>
 
         {buttons?.map((button) => (
-          <Grid item xs={4} md={3} lg={2} key={button?.key}>
+          <Grid size={{ xs: 4, md: 3, lg: 2 }} key={button?.key}>
             <Button
               variant="outlined"
               onClick={button?.onClick}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import type { Category, CreateCategoryRequest } from '../api/services/categories';
 import {
   useCategories,
   useCreateCategory,
@@ -18,7 +19,7 @@ import {
 
 export default function CategoryExample() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -32,9 +33,13 @@ export default function CategoryExample() {
   const updateCategory = useUpdateCategory();
   const deleteCategory = useDeleteCategory();
 
+  // CreateCategoryRequest.status is the union 'active' | 'inactive'; the form state
+  // held a plain string, so every submit was rejected by the type checker.
+  type CategoryForm = CreateCategoryRequest;
+
   const handleCreate = async () => {
     try {
-      await createCategory.mutateAsync(formData);
+      await createCategory.mutateAsync(formData as CategoryForm);
       setIsModalOpen(false);
       setFormData({ name: '', slug: '', description: '', status: 'active' });
     } catch (error) {
@@ -45,8 +50,10 @@ export default function CategoryExample() {
   const handleUpdate = async () => {
     try {
       await updateCategory.mutateAsync({
-        id: editingCategory.id,
-        data: formData,
+        // handleUpdate only runs from the edit modal, which always has a row, but
+        // editingCategory is nullable state - guard rather than assert.
+        id: editingCategory?.id ?? '',
+        data: formData as Partial<CreateCategoryRequest>,
       });
       setIsModalOpen(false);
       setEditingCategory(null);
@@ -56,7 +63,7 @@ export default function CategoryExample() {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: string) => {
     try {
       await deleteCategory.mutateAsync(id);
     } catch (error) {
@@ -70,7 +77,7 @@ export default function CategoryExample() {
     setIsModalOpen(true);
   };
 
-  const openEditModal = (category) => {
+  const openEditModal = (category: Category) => {
     setEditingCategory(category);
     setFormData({
       name: category.name,
@@ -103,7 +110,9 @@ export default function CategoryExample() {
 
       {/* Categories List */}
       <Box>
-        {categories?.data?.map((category) => (
+        {/* The list hook returns CategoriesListResponse, whose payload key is
+            `categories` - not `data`. Reading `data` here rendered nothing. */}
+        {categories?.categories?.map((category: Category) => (
           <Box
             key={category.id}
             sx={{
@@ -144,7 +153,7 @@ export default function CategoryExample() {
                 variant="outlined"
                 color="error"
                 size="small"
-                onClick={() => handleDelete(category.id)}
+                onClick={() => handleDelete(category.id ?? '')}
                 disabled={deleteCategory.isPending}
               >
                 {deleteCategory.isPending ? 'Deleting...' : 'Delete'}

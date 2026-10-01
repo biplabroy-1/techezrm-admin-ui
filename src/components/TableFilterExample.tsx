@@ -9,6 +9,8 @@ const TableFilterExample: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  // TableFilter's date props are nullable, and its own clear button calls
+  // onDateChange(null) - so null is the right empty state here.
   const [dateFilter, setDateFilter] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<{
     startDate: Date | null;

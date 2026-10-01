@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import type { CreateProductRequest } from '../api/services/products';
 import {
   useProducts,
   useCreateProduct,
@@ -10,7 +11,7 @@ import { Button, Box, Typography, TextField } from '@mui/material';
 // Example component showing direct hook usage
 export default function ProductExample() {
   const [newProduct, setNewProduct] = useState({ name: '', price: '' });
-  const [editingId, setEditingId] = useState(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Direct hook usage - no handlers needed
   const { data: products, isLoading, error } = useProducts();
@@ -33,7 +34,7 @@ export default function ProductExample() {
     }
   };
 
-  const handleUpdate = async (id, data) => {
+  const handleUpdate = async (id: string, data: Partial<CreateProductRequest>) => {
     try {
       await updateProduct.mutateAsync({ id, data });
       setEditingId(null);
@@ -42,7 +43,7 @@ export default function ProductExample() {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: string) => {
     try {
       await deleteProduct.mutateAsync(id);
     } catch (error) {
@@ -93,14 +94,18 @@ export default function ProductExample() {
 
       {/* Products List */}
       <Box>
-        {products?.data?.map((product) => (
+        {/* The list hook returns ProductsListResponse, whose payload key is
+            `products`. Reading `data` here rendered nothing at all. */}
+        {products?.products?.map((product) => (
           <Box
-            key={product.id}
+            key={product._id}
             sx={{ mb: 2, p: 2, border: '1px solid #eee', borderRadius: 1 }}
           >
             <Typography variant="h6">{product.name}</Typography>
             <Typography>Price: ${product.price}</Typography>
-            <Typography>Category: {product.category}</Typography>
+            {/* Product.category is an object {_id, name}; rendering it directly put
+                "[object Object]" on screen. */}
+            <Typography>Category: {product.category?.name ?? 'N/A'}</Typography>
             <Typography>In Stock: {product.inStock ? 'Yes' : 'No'}</Typography>
 
             <Box sx={{ mt: 1 }}>
@@ -108,7 +113,7 @@ export default function ProductExample() {
                 variant="outlined"
                 size="small"
                 sx={{ mr: 1 }}
-                onClick={() => setEditingId(product.id)}
+                onClick={() => setEditingId(product._id ?? null)}
               >
                 Edit
               </Button>
@@ -116,7 +121,7 @@ export default function ProductExample() {
                 variant="outlined"
                 color="error"
                 size="small"
-                onClick={() => handleDelete(product.id)}
+                onClick={() => handleDelete(product._id ?? '')}
                 disabled={deleteProduct.isPending}
               >
                 {deleteProduct.isPending ? 'Deleting...' : 'Delete'}

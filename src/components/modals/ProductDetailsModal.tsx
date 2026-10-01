@@ -118,7 +118,7 @@ export default function ProductDetailsModal({
 
   const renderBasicDetails = () => (
     <Grid container spacing={3}>
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <Card sx={{ height: '100%' }}>
           <CardContent>
             <Typography
@@ -187,7 +187,7 @@ export default function ProductDetailsModal({
         </Card>
       </Grid>
 
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <Card sx={{ height: '100%' }}>
           <CardContent>
             <Typography
@@ -254,7 +254,7 @@ export default function ProductDetailsModal({
         </Card>
       </Grid>
 
-      <Grid item xs={12}>
+      <Grid size={{ xs: 12 }}>
         <Card>
           <CardContent>
             <Typography
@@ -264,7 +264,7 @@ export default function ProductDetailsModal({
               Status & Stock Information
             </Typography>
             <Grid container spacing={3}>
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <Box sx={{ textAlign: 'center' }}>
                   <Typography
                     variant="body2"
@@ -281,7 +281,7 @@ export default function ProductDetailsModal({
                   />
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <Box sx={{ textAlign: 'center' }}>
                   <Typography
                     variant="body2"
@@ -298,7 +298,7 @@ export default function ProductDetailsModal({
                   />
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <Box sx={{ textAlign: 'center' }}>
                   <Typography
                     variant="body2"
@@ -321,7 +321,7 @@ export default function ProductDetailsModal({
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <Box sx={{ textAlign: 'center' }}>
                   <Typography
                     variant="body2"
@@ -350,7 +350,7 @@ export default function ProductDetailsModal({
       </Grid>
 
       {product?.tags && product.tags.length > 0 && (
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Card>
             <CardContent>
               <Typography
@@ -381,7 +381,7 @@ export default function ProductDetailsModal({
     <Grid container spacing={3}>
       {/* Banner Image */}
       {product?.bannerImage && (
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Card>
             <CardContent>
               <Typography
@@ -424,7 +424,7 @@ export default function ProductDetailsModal({
 
       {/* Product Images */}
       {product?.images && product.images.length > 0 && (
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Card>
             <CardContent>
               <Typography
@@ -435,7 +435,7 @@ export default function ProductDetailsModal({
               </Typography>
               <Grid container spacing={2}>
                 {product.images.map((image, index) => (
-                  <Grid item xs={12} sm={6} md={4} key={index}>
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
                     <Box
                       sx={{
                         position: 'relative',
@@ -470,7 +470,7 @@ export default function ProductDetailsModal({
 
       {!product?.bannerImage &&
         (!product?.images || product.images.length === 0) && (
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Card>
               <CardContent>
                 <Box
@@ -631,7 +631,7 @@ export default function ProductDetailsModal({
 
   const renderOtherDetails = () => (
     <Grid container spacing={3}>
-      <Grid item xs={12}>
+      <Grid size={{ xs: 12 }}>
         <Card>
           <CardContent>
             <Typography
@@ -641,7 +641,7 @@ export default function ProductDetailsModal({
               System Information
             </Typography>
             <Grid container spacing={3}>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Box>
                   <Typography
                     variant="body2"
@@ -664,7 +664,7 @@ export default function ProductDetailsModal({
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Box>
                   <Typography
                     variant="body2"
@@ -684,7 +684,7 @@ export default function ProductDetailsModal({
       </Grid>
 
       {product?.dietaryAttributes && product.dietaryAttributes.length > 0 && (
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Card>
             <CardContent>
               <Typography
@@ -695,7 +695,7 @@ export default function ProductDetailsModal({
               </Typography>
               <Grid container spacing={2}>
                 {product.dietaryAttributes.map((attr, index) => (
-                  <Grid item xs={12} sm={6} md={4} key={index}>
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
                     <Card variant="outlined">
                       <CardContent>
                         <Typography

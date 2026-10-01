@@ -238,7 +238,7 @@ export default function EditCustomerPage() {
 
       <Paper sx={{ p: 3 }}>
         <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Name"
@@ -246,7 +246,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('name', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Email"
@@ -254,7 +254,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('email', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Phone"
@@ -262,7 +262,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('phone', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <FormControl fullWidth>
               <InputLabel>Status</InputLabel>
               <Select
@@ -276,7 +276,7 @@ export default function EditCustomerPage() {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <FormControl fullWidth>
               <InputLabel>Membership Tier</InputLabel>
               <Select
@@ -291,7 +291,7 @@ export default function EditCustomerPage() {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Company Name"
@@ -299,7 +299,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('companyName', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Industry"
@@ -307,7 +307,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('industry', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Website"
@@ -315,7 +315,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('website', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Employee Count"
@@ -323,7 +323,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('employeeCount', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Annual Revenue"
@@ -331,7 +331,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('annualRevenue', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Business Type"
@@ -339,7 +339,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('businessType', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Tax ID"
@@ -347,7 +347,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('taxId', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Registration Number"
@@ -355,7 +355,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('registrationNumber', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Contact Person"
@@ -363,7 +363,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('contactPerson', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Contact Person Phone"
@@ -371,7 +371,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('contactPersonPhone', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="Contact Person Email"
@@ -379,7 +379,7 @@ export default function EditCustomerPage() {
               onChange={(e) => handleChange('contactPersonEmail', e.target.value)}
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               multiline

@@ -12,7 +12,7 @@ interface OrderRowData extends TableRowData {
   phoneNumber: string
   quantity: string
   dateTime: string
-  trackOrder: string
+  trackOrder?: string
   status?: string
 }
 
@@ -68,7 +68,10 @@ export default function OrderList() {
     rfqData?.rfqs?.map((rfq) => {
       try {
         return {
-          id: rfq?._id,
+          // TableRowData requires a string id, and an RFQ without one would render a
+          // row keyed on undefined. Fall back explicitly rather than typing the gap
+          // away.
+          id: rfq?._id || "unknown",
           customerName: rfq.customerName || "N/A",
           email: rfq.customerEmail || "N/A",
           phoneNumber: rfq.customerPhone || "N/A",
