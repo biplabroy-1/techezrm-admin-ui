@@ -7,10 +7,9 @@
  * fixed set of named fields, and every transformation between the stored object
  * and the list of inputs lives here where it can be tested without a DOM.
  *
- * One rule the whole file obeys: a key is only ever *trimmed*, never
- * case-normalised and never collapsed internally. "Shelf Life " and "Shelf Life"
- * are two different specs in the source data and merging them would silently
- * destroy one of them.
+ * One rule the whole file obeys: a stored key is never rewritten. Not
+ * case-folded, not whitespace-collapsed, and not trimmed. See `rowsToSpec` for
+ * why the trim is the one that matters.
  */
 
 export interface SpecRow {
@@ -49,12 +48,15 @@ export function specRowRemoved(rows: SpecRow[], index: number): SpecRow[] {
 /**
  * Rows without a key are half-finished input, not data - drop them.
  *
- * The key is stored VERBATIM. The trim below is only a "has the admin finished
+ * The key is stored VERBATIM. `trim()` below is only a "has the admin finished
  * this row?" test, never a rewrite of what gets stored, and that distinction is
- * load-bearing: the migrated catalogue holds both `"Shelf Life "` and
- * `"Shelf Life"`, which are two different specs. Storing the trimmed key would
- * collapse them into one, so simply opening the product and pressing Update
- * would rename a spec and drop the other. Values are never trimmed at all.
+ * load-bearing: `out[key.trim()]` is the shorter and more readable line, and it
+ * is wrong. 12 of the 240 migrated products are keyed `"Shelf Life "` with a
+ * trailing space, so any save at all - including one where the admin only
+ * touched the price - would rewrite that key to `"Shelf Life"` and answer 200.
+ * No product carries both spellings, so no row is lost and no two rows collapse;
+ * the damage is a silent rename, with no diff anywhere to show for it.
+ * Values are never trimmed at all.
  */
 export function rowsToSpec(rows: SpecRow[]): Record<string, string> {
   const out: Record<string, string> = {};
