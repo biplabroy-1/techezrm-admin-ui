@@ -27,7 +27,6 @@ const Verify = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login attempted with:', { password });
   };
 
   const handleTogglePasswordVisibility = () => {

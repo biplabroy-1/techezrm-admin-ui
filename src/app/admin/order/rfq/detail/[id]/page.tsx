@@ -30,8 +30,6 @@ const RFQDetail = () => {
   // Fetch RFQ data using the API
   const { data: rfqData, isLoading, error } = useRFQById(rfqId)
 
-  console.log("RFQ Detail Data:", rfqData)
-  console.log("RFQ ID from params:", rfqId)
 
   // Don't render until mounted to avoid hydration issues
   if (!mounted) {

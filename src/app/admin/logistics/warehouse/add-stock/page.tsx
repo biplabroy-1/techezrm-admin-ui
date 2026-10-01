@@ -170,7 +170,6 @@ export default function AddStockToWarehouse() {
       return data;
     },
     onError: (error: any) => {
-      console.log(error?.message, 'error');
       toast.error(error?.message || 'Failed to add stock to warehouse');
     },
   });
@@ -187,8 +186,6 @@ export default function AddStockToWarehouse() {
 
   const warehouses: any = warehousesData?.warehouses ?? [];
 
-  console.log('Warehouses data:', warehousesData);
-  console.log('Warehouses array:', warehouses);
 
   const {
     data: productsData,
@@ -201,8 +198,6 @@ export default function AddStockToWarehouse() {
 
   const products: any = productsData?.products ?? [];
 
-  console.log('Products data:', productsData);
-  console.log('Products array:', products);
 
   // const { products, isLoadingProducts }: any = useProducts();
   const [validationErrors, setValidationErrors] = useState<
@@ -223,7 +218,6 @@ export default function AddStockToWarehouse() {
   });
 
   const handleInputChange = (field: string, value: any) => {
-    console.log('handleInputChange called:', field, value);
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -231,7 +225,6 @@ export default function AddStockToWarehouse() {
   };
 
   const handleSubmit = async () => {
-    console.log(formData, 'formData');
 
     try {
       // Validate required fields

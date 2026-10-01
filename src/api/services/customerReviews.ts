@@ -121,7 +121,6 @@ export const customerReviewsService = {
         params,
       })
 
-      console.log("Raw Customer Reviews API Response:", data)
 
       // Handle the actual API response structure
       const apiResponse = data as ApiResponse
@@ -151,7 +150,6 @@ export const customerReviewsService = {
         }
       })
 
-      console.log("Transformed Customer Reviews:", transformedReviews)
 
       return {
         reviews: transformedReviews,
@@ -208,7 +206,6 @@ export const customerReviewsService = {
   }: { reviewId: string; data: UpdateReviewRequest }): Promise<CustomerReview> => {
     try {
       const response = await api.put(`${ENDPOINTS.CUSTOMER_REVIEWS.UPDATE.replace(":id", reviewId)}`, data)
-      console.log("Update Review API Response:", response.data)
 
       // Handle the actual API response structure
       if (response.data.success && response.data.data) {

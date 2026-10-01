@@ -51,7 +51,6 @@ export default function WishlistTab({ customerId }: WishlistTabProps) {
     enabled: !!customerId,
   });
 
-  console.log(wishlistData, 'wishlistData__wishlistData');
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {

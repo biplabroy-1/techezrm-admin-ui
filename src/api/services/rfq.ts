@@ -84,7 +84,6 @@ export const rfqService = {
         params,
       })
 
-      console.log("Raw RFQ API Response:", data)
       
       // Handle the actual API response structure
       const apiResponse = data as ApiResponse
@@ -92,7 +91,6 @@ export const rfqService = {
       // Get RFQs from the nested data structure
       const rfqs = apiResponse.data?.rfqs || []
       
-      console.log("Transformed RFQs:", rfqs)
 
       return {
         rfqs:data?.data,
@@ -111,7 +109,6 @@ export const rfqService = {
   getRFQById: async (id: string): Promise<RFQItem> => {
     try {
       const response = await api.get(`${ENDPOINTS.RFQ.GET_BY_ID.replace(":id", id)}`)
-      console.log("Single RFQ API Response:", response.data)
 
       const apiResponse = response.data as SingleRFQResponse
 

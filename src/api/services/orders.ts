@@ -134,7 +134,6 @@ export const ordersService = {
         params,
       })
 
-      console.log("Raw Customer Orders API Response:", data)
 
       const apiResponse = data as CustomerOrdersApiResponse
 
@@ -161,7 +160,6 @@ export const ordersService = {
 getOrderById: async (id: string): Promise<CustomerOrder> => {
     try {
       const response = await api.get(`${ENDPOINTS.ORDERS.GET_BY_ID.replace(":id", id)}`)
-      console.log("Single Order API Response:", response.data)
 
       const apiResponse = response.data as SingleOrderApiResponse
 

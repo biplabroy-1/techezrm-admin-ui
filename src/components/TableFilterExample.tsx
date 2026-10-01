@@ -28,11 +28,9 @@ const TableFilterExample: React.FC = () => {
   };
 
   const handleExport = () => {
-    console.log('Exporting data...');
   };
 
   const handleAddNew = () => {
-    console.log('Adding new item...');
   };
 
   return (
@@ -65,12 +63,12 @@ const TableFilterExample: React.FC = () => {
           {
             key: 'sku',
             placeholder: 'Enter SKU',
-            onSearch: (value) => console.log('SKU search:', value),
+            onSearch: () => {},
           },
           {
             key: 'barcode',
             placeholder: 'Enter Barcode',
-            onSearch: (value) => console.log('Barcode search:', value),
+            onSearch: () => {},
           },
         ]}
         // Dropdown filters

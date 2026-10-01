@@ -180,7 +180,6 @@ const categories: CategoryItem[] =
   
  useEffect(() => {
   if (categoriesData) {
-    console.log("Categories loaded:", categoriesData);
   }
 }, [categoriesData]);
 

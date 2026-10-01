@@ -58,7 +58,6 @@ const Set = () => {
             // Check if data is recent (within 15 minutes)
             if (Date.now() - data.timestamp < 15 * 60 * 1000) {
               setUserEmail(data.email);
-              console.log('Email loaded from sessionStorage:', data.email);
             } else {
               // Data expired, redirect back
               setError(

@@ -114,8 +114,6 @@ const ShipmentDetail = () => {
   // Fetch shipment data using the API
   const { data: shipmentData, isLoading, error } = useShipmentById(shipmentId)
 
-  console.log("Shipment Detail Data:", shipmentData)
-  console.log("Shipment ID from params:", shipmentId)
 
   // Don't render until mounted to avoid hydration issues
   if (!mounted) {

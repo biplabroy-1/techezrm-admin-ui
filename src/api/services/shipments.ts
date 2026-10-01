@@ -97,7 +97,6 @@ export const shipmentsService = {
         params,
       })
 
-      console.log("Raw Shipments API Response:", data)
 
       // Handle the actual API response structure
       const apiResponse = data as ApiResponse
@@ -111,7 +110,6 @@ export const shipmentsService = {
         id: shipment._id, // Map _id to id for frontend consistency
       }))
 
-      console.log("Transformed Shipments:", transformedShipments)
 
       return {
         shipments: transformedShipments,
@@ -130,7 +128,6 @@ export const shipmentsService = {
   getShipmentById: async (id: string): Promise<Shipment> => {
     try {
       const response = await api.get(`${ENDPOINTS.SHIPMENTS.GET_BY_ID.replace(":id", id)}`)
-      console.log("Single Shipment API Response:", response.data)
 
       if (response.data.success && response.data.data) {
         const shipment = response.data.data

@@ -35,8 +35,6 @@ export default function OrderList() {
     status: statusFilter,
   })
 
-  console.log("RFQ Data:", rfqData)
-  console.log("RFQ Error:", error)
 
   const statusOptions = [
     { value: "", label: "Status" },

@@ -59,8 +59,6 @@ export default function ShipmentTable({ filterValue = "", searchTerm = "" }: Shi
     status: filterValue,
   })
 
-  console.log("Shipments Data:", shipmentsData)
-  console.log("Shipments Error:", error)
 
   // Format date helper
   const formatDate = (dateString?: string) => {

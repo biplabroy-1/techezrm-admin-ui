@@ -47,7 +47,11 @@ export const authService = {
   // Register
   register: async (userData: RegisterData): Promise<AuthResponse> => {
     const { data } = await api.post(ENDPOINTS.AUTH.REGISTER, userData);
-    console.log({ email: userData.email, password: userData.password }); // Auto-login after registration
+    // Previously logged `{ email, password }` here, writing the plaintext password
+    // to the browser console on every registration. authService.register is reached
+    // from Signup.tsx and authHandler's useRegister, so this fired on every real
+    // signup - and console output persists in the devtools record and in any
+    // error-reporting wrapper that captures it.
     return data;
   },
 

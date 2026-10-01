@@ -55,7 +55,6 @@ export function OrderTrackingClient({ id }: OrderTrackingClientProps) {
   }: any = usePurchaseOrder(id);
   const purchaseOrder = purchaseOrderData?.data;
 
-  console.log(purchaseOrder, 'purchaseOrder__purchaseOrder');
 
   // Loading state
   if (isLoading) {

@@ -145,16 +145,11 @@ const productData = {
 };
 
 
-  console.log("=== COMPONENT INITIALIZATION ===")
-  console.log(searchParams,"Product data from URL/props:", productData)
 
   // Hooks
   const { notifications, addNotification } = useUIStore()
   const updateProductMutation = useUpdateProduct()
 
-  console.log("=== MUTATION STATUS ===")
-  console.log("Mutation object:", updateProductMutation)
-  console.log("Is pending:", updateProductMutation.isPending)
 
   // State management
   const [includeTax, setIncludeTax] = useState(true)
@@ -206,10 +201,6 @@ const productData = {
     category: productData.category || "",
   })
 
-  console.log("=== INITIAL FORM DATA ===")
-  console.log("Form data:", formData)
-  console.log("Selected categories:", selectedCategories)
-  console.log("In stock:", inStock)
 
   // Initialize form with existing product data
 // useEffect(() => {
@@ -253,8 +244,6 @@ const productData = {
 // }, [productData]) 
 
 useEffect(() => {
-  console.log("=== USEEFFECT RUNNING ===")
-  console.log("Product category:", productData)
 
   // Set form data once
   if (productData.name && !formData.name) {
@@ -284,51 +273,27 @@ useEffect(() => {
 
   // Form validation with detailed logging
   const validateForm = (): boolean => {
-    console.log("=== FORM VALIDATION START ===")
     const errors: Record<string, string> = {}
 
-    console.log("Validating name:", `"${formData.name}"`, "Trimmed:", `"${formData.name.trim()}"`)
     if (!formData.name.trim()) {
       errors.name = "Product name is required"
-      console.log("❌ Name validation FAILED")
     } else {
-      console.log("✅ Name validation PASSED")
     }
 
-    console.log("Validating description:", `"${formData.description}"`, "Trimmed:", `"${formData.description.trim()}"`)
     if (!formData.description.trim()) {
       errors.description = "Product description is required"
-      console.log("❌ Description validation FAILED")
-    } else {
-      console.log("✅ Description validation PASSED")
     }
 
-    console.log(
-      "Validating price:",
-      `"${formData.price}"`,
-      "Number:",
-      Number(formData.price),
-      "IsNaN:",
-      isNaN(Number(formData.price)),
-    )
     if (!formData.price || isNaN(Number(formData.price)) || Number(formData.price) <= 0) {
       errors.price = "Valid price is required"
-      console.log("❌ Price validation FAILED")
     } else {
-      console.log("✅ Price validation PASSED")
     }
 
-    console.log("Validating categories:", selectedCategories, "Length:", selectedCategories.length)
     if (selectedCategories.length === 0) {
       errors.categories = "Please select at least one category"
-      console.log("❌ Categories validation FAILED")
     } else {
-      console.log("✅ Categories validation PASSED")
     }
 
-    console.log("=== VALIDATION SUMMARY ===")
-    console.log("Errors found:", errors)
-    console.log("Validation result:", Object.keys(errors).length === 0 ? "PASSED" : "FAILED")
 
     setFormErrors(errors)
     return Object.keys(errors).length === 0
@@ -336,37 +301,22 @@ useEffect(() => {
 
   // Form submission handler with extensive logging
   const handleUpdate = async () => {
-    console.log("🚀 =========================")
-    console.log("🚀 UPDATE BUTTON CLICKED!")
-    console.log("🚀 =========================")
 
     try {
-      console.log("📋 Current form state:")
-      console.log("  - Form data:", formData)
-      console.log("  - Selected categories:", selectedCategories)
-      console.log("  - In stock:", inStock)
-      console.log("  - Product ID:", productData.id)
 
-      console.log("🔍 Starting form validation...")
       const isValid = validateForm()
 
       if (!isValid) {
-        console.log("❌ VALIDATION FAILED - Stopping execution")
-        console.log("❌ Form errors:", formErrors)
         return
       }
-      console.log("✅ VALIDATION PASSED")
 
-      console.log("🔍 Checking product ID...")
       if (!productData.id) {
-        console.log("❌ PRODUCT ID MISSING")
         addNotification({
           type: "error",
           message: "Product ID is missing. Cannot update product.",
         })
         return
       }
-      console.log("✅ PRODUCT ID FOUND:", productData.id)
 
       // Prepare API payload
       const updatePayload: Partial<CreateProductRequest> = {
@@ -377,40 +327,24 @@ useEffect(() => {
         inStock: inStock,
       }
 
-      console.log("📤 PREPARED API PAYLOAD:")
-      console.log(JSON.stringify(updatePayload, null, 2))
 
-      console.log("🔍 Checking mutation function...")
-      console.log("Mutation function exists:", typeof updateProductMutation.mutateAsync === "function")
-      console.log("Mutation status:", {
-        isPending: updateProductMutation.isPending,
-        isError: updateProductMutation.isError,
-        isSuccess: updateProductMutation.isSuccess,
-      })
 
-      console.log("🚀 CALLING API MUTATION...")
 
       const result = await updateProductMutation.mutateAsync({
         productId: productData.id,
         data: updatePayload,
       })
 
-      console.log("✅ API CALL SUCCESSFUL!")
-      console.log("✅ Result:", result)
 
       // Navigate back after successful update
       setTimeout(() => {
-        console.log("🔄 Navigating back...")
         router.back()
       }, 1500)
     } catch (error) {
-      console.log("❌ ERROR IN HANDLE UPDATE:")
       console.error(error)
 
       // Additional error details
       if (error instanceof Error) {
-        console.log("Error message:", error.message)
-        console.log("Error stack:", error.stack)
       }
     }
   }
@@ -453,10 +387,8 @@ useEffect(() => {
 
   // Category handlers
   const handleCategoryChange = (category: CategoryItem) => {
-    console.log("Category changed:", category)
     setSelectedCategories((prev) => {
       const newSelection = prev.includes(category?._id) ? prev.filter((c) => c !== category._id) : [...prev, category._id]
-      console.log("New category selection:", newSelection)
       return newSelection
     })
 
@@ -517,7 +449,6 @@ useEffect(() => {
                   sx={{ mb: 2 }}
                   value={formData.name}
                   onChange={(e) => {
-                    console.log("Name changed to:", e.target.value)
                     setFormData({ ...formData, name: e.target.value })
                     if (formErrors.name) {
                       setFormErrors((prev) => ({ ...prev, name: "" }))
@@ -539,7 +470,6 @@ useEffect(() => {
                   sx={{ mb: 1 }}
                   value={formData.description}
                   onChange={(e) => {
-                    console.log("Description changed to:", e.target.value)
                     setFormData({ ...formData, description: e.target.value })
                     if (formErrors.description) {
                       setFormErrors((prev) => ({ ...prev, description: "" }))
@@ -625,7 +555,6 @@ useEffect(() => {
                       placeholder="0.00"
                       value={formData.price}
                       onChange={(e) => {
-                        console.log("Price changed to:", e.target.value)
                         setFormData({ ...formData, price: e.target.value })
                         if (formErrors.price) {
                           setFormErrors((prev) => ({ ...prev, price: "" }))
@@ -668,7 +597,6 @@ useEffect(() => {
                     <CustomSwitch
                       checked={inStock}
                       onChange={(e) => {
-                        console.log("Stock status changed to:", e.target.checked)
                         setInStock(e.target.checked)
                       }}
                     />
@@ -820,7 +748,6 @@ useEffect(() => {
                   position: "relative",
                 }}
                 onClick={(e) => {
-                  console.log("🔘 UPDATE BUTTON CLICKED - Event:", e)
                   handleUpdate()
                 }}
                 disabled={updateProductMutation.isPending}

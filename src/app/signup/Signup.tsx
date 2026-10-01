@@ -50,7 +50,6 @@ const Signup = () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     onSuccess: (success) => {
       toast.success('Registration successful | Please wait for admin approval');
-      console.log('Registration successful');
       setForm({
         firstName: '',
         lastName: '',
@@ -64,7 +63,6 @@ const Signup = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      console.log(error, 'error');
       toast.error(error?.errors?.[0]?.message || error?.message);
     },
   });

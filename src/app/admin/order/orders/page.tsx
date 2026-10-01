@@ -35,8 +35,6 @@ export default function OrderList() {
     status: statusFilter,
   })
 
-  console.log("Customer Orders Data:", ordersData)
-  console.log("Orders Error:", error)
 
   const statusOptions = [
     { value: "", label: "All Status" },

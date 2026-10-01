@@ -226,7 +226,6 @@ export default function AddPurchaseOrder() {
       return data;
     },
     onError: (error: any) => {
-      console.log(error?.message, 'error');
 
       // The API rejects with `{ message, error }`; Error carries no `error` field,
       // so this rendered "undefined" in the toast.
@@ -245,8 +244,6 @@ export default function AddPurchaseOrder() {
 
   const suppliers: any = suppliersData?.data ?? [];
 
-  console.log('Suppliers data:', suppliersData);
-  console.log('Suppliers array:', suppliers);
 
   const {
     data: productsData,
@@ -259,8 +256,6 @@ export default function AddPurchaseOrder() {
 
   const products: any = productsData?.products ?? [];
 
-  console.log('Products data:', productsData);
-  console.log('Products array:', products);
 
   const { data: warehousesData, isFetching: isLoadingWarehouses } = useQuery({
     queryKey: ['warehouses', {}],
@@ -330,7 +325,6 @@ export default function AddPurchaseOrder() {
   ]);
 
   const handleInputChange = (field: string, value: any) => {
-    console.log('handleInputChange called:', field, value);
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
       setFormData((prev) => ({
@@ -399,7 +393,6 @@ export default function AddPurchaseOrder() {
   };
 
   const handleSubmit = async () => {
-    console.log(formData, 'formData');
 
     try {
       // Clear previous validation errors
