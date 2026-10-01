@@ -445,14 +445,18 @@ export default function EditProductModal({
 
     // Create FormData for multipart/form-data.
     //
-    // `specifications` and `dietaryAttributes` are appended by the builder, always
-    // and even when empty - the server treats an absent key as "leave alone", so
-    // omitting an emptied field would silently undo the admin's delete.
+    // The builder is the whole payload: `applications`, `functions`,
+    // `countryOfOrigin` and `tags` go out verbatim, as do `specifications`,
+    // `dietaryAttributes` and `images`, each sent even when empty - the server
+    // treats an absent key as "leave alone", so omitting an emptied field would
+    // silently undo the admin's delete.
     //
-    // The four array fields below are still built here rather than in the builder
-    // because they get slugified on the way out, and slugifying a migrated value
-    // like "CAS No: 14281-83-5" destroys it. That fix is a separate change and
-    // moving them now would half-apply it.
+    // Nothing here slugifies. `handleSubmit` used to convert these four lists to
+    // slugs against `filtersData`, so a migrated value like "CAS No: 14281-83-5"
+    // became "cas-no-14281-83-5" on the first save - destroying the CAS number,
+    // with a success toast and nothing in the log. `filtersData` still fills the
+    // pickers above; it must never touch the values on the way out.
+    //
     // `specifications` is taken from the editor buffer rather than from
     // formData, so a row that was typed into but never blurred is still saved.
     //
@@ -465,47 +469,6 @@ export default function EditProductModal({
       category: '',
       specifications: rowsToSpec(specRows),
     });
-
-    if (formData.tags && formData.tags.length > 0) {
-      // Convert tag names to slugs
-      const tagSlugs = formData.tags.map((tagName) => {
-        const tagData = filtersData?.data?.tag?.find(
-          (tag) => tag.name === tagName
-        );
-        return tagData?.slug || tagName.toLowerCase().replace(/\s+/g, '-');
-      });
-      formDataToSend.append('tags', JSON.stringify(tagSlugs));
-    }
-    if (formData.applications && formData.applications.length > 0) {
-      // Convert application names to slugs
-      const applicationSlugs = formData.applications.map((appName) => {
-        const appData = filtersData?.data?.application?.find(
-          (app) => app.name === appName
-        );
-        return appData?.slug || appName.toLowerCase().replace(/\s+/g, '-');
-      });
-      formDataToSend.append('applications', JSON.stringify(applicationSlugs));
-    }
-    if (formData.functions && formData.functions.length > 0) {
-      // Convert function names to slugs
-      const functionSlugs = formData.functions.map((funcName) => {
-        const funcData = filtersData?.data?.function?.find(
-          (func) => func.name === funcName
-        );
-        return funcData?.slug || funcName.toLowerCase().replace(/\s+/g, '-');
-      });
-      formDataToSend.append('functions', JSON.stringify(functionSlugs));
-    }
-    if (formData.countryOfOrigin && formData.countryOfOrigin.length > 0) {
-      // Convert country names to country codes
-      const countryCodes = formData.countryOfOrigin.map((countryName) => {
-        const countryData = filtersData?.data?.countryOfOrigin?.find(
-          (country) => country.name === countryName
-        );
-        return countryData?.countryCode || countryName;
-      });
-      formDataToSend.append('countryOfOrigin', JSON.stringify(countryCodes));
-    }
 
     updateProductMutation.mutate(formDataToSend);
   };

@@ -46,12 +46,26 @@ export interface ProductFormValues {
   appearance?: string;
   bannerImage?: string;
   images?: string[];
+  /**
+   * Facet slugs, e.g. `vegan`. Genuine slugs rather than labels:
+   * `product.service.ts:86` filters on them (`tags: { $in: filter.tag }`). Sent
+   * as the picker holds them - never re-derived from the facet list, which is
+   * what used to rewrite this and the three fields below.
+   */
   tags?: string[];
   /** Free-form spec rows. Keys are stored verbatim, trailing space included. */
   specifications?: Record<string, string>;
   dietaryAttributes?: DietaryAttribute[];
+  /**
+   * Free text, sent verbatim. The migration writes real content here -
+   * `functions` holds flattened CAS data like `"CAS No: 14281-83-5"` and
+   * `"Source: Mineral chelation (zinc oxide)"`, and applications hold display
+   * names like `"Bone & joint health"`. Slugifying any of it destroyed the value
+   * on the first admin save.
+   */
   applications?: string[];
   functions?: string[];
+  /** Country codes as stored, e.g. `["IN", "US"]`. */
   countryOfOrigin?: string[];
 }
 
@@ -110,10 +124,35 @@ export function buildUpdateProductFormData(v: ProductFormValues): FormData {
   fd.append('unit', v.unit || '');
   fd.append('appearance', v.appearance || '');
   fd.append('bannerImage', v.bannerImage || '');
-  if (v.images?.length) fd.append('images', JSON.stringify(v.images));
-  // Full-form replace, so these two are sent even when empty.
+  // Sent even when empty, like the lists below: `if (v.images?.length)` meant an
+  // admin who deleted the last image sent no `images` key at all, and the server's
+  // presence guard (`decodeProductFields` writes only what the body carries) then
+  // left the stored gallery alone - the delete silently undid itself. New file
+  // uploads still win server-side: `updateProduct` only overrides `images` from
+  // `uploaded.images` when multer actually received files.
+  appendReplaceJson(fd, 'images', v.images ?? []);
+  // Full-form replace, so these are sent even when empty.
   appendReplaceJson(fd, 'specifications', v.specifications ?? {});
   appendReplaceJson(fd, 'dietaryAttributes', v.dietaryAttributes ?? []);
+  /**
+   * The four list fields, VERBATIM.
+   *
+   * `handleSubmit` used to slugify these against `filtersData` before appending,
+   * which turned `"CAS No: 14281-83-5"` into `cas-no-14281-83-5` on the first
+   * admin save and destroyed the CAS number. They are moved here as they are held:
+   * no case folding, no whitespace collapsing, no facet lookup. `tags` is included
+   * in that rule even though it is the one field that really is slugs
+   * (`product.service.ts:86` filters on it) - the picker already holds the facet
+   * value, and re-deriving it here is what caused the damage.
+   *
+   * `appendReplaceJson`, not `appendJsonIfPresent`: the admin save is a
+   * full-form replace, so clearing the last tag must arrive as `[]`. An absent key
+   * is read server-side as "leave alone".
+   */
+  appendReplaceJson(fd, 'tags', v.tags ?? []);
+  appendReplaceJson(fd, 'applications', v.applications ?? []);
+  appendReplaceJson(fd, 'functions', v.functions ?? []);
+  appendReplaceJson(fd, 'countryOfOrigin', v.countryOfOrigin ?? []);
   // NOT appendReplaceJson, and the difference is deliberate. `categoryIds` is
   // optional here because this builder serves both create and update, and on create
   // the product has no `_id` yet so there are no links to write. Sending `[]` on
