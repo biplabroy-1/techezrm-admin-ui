@@ -135,6 +135,14 @@ const sidebarItems: SidebarItem[] = [
     options: [
       { text: 'Products Listing', path: '/admin/data-management/products' },
       { text: 'Categories Listing', path: '/admin/data-management/categories' },
+      // Added with the screens they point at. Without nav entries these pages are
+      // reachable only by typing the URL, which makes an unmaintained screen look
+      // like a deleted one.
+      { text: 'FAQs', path: '/admin/data-management/faqs' },
+      {
+        text: 'Certification Types',
+        path: '/admin/data-management/certifications',
+      },
       { text: 'Warehouse Listing', path: '/admin/data-management/warehouses' },
       { text: 'Suppliers Listing', path: '/admin/data-management/suppliers' },
     ],

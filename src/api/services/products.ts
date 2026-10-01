@@ -87,6 +87,24 @@ export interface ProductsListResponse {
   error?: string;
 }
 
+/**
+ * A category as the link endpoint returns it: `populate("categoryId", "name slug")`
+ * selects exactly those two fields, so `_id` is the only id available and the
+ * admin cannot read back the slug it did not ask for.
+ */
+export interface ProductCategory {
+  _id: string;
+  name: string;
+  slug?: string;
+}
+
+export interface ProductCategoriesResponse {
+  success: boolean;
+  categories?: ProductCategory[];
+  message?: string;
+  error?: string;
+}
+
 class ProductService {
   getProductsByPriceRange(arg0: {
     minPrice: number;
@@ -302,6 +320,55 @@ class ProductService {
     } catch (error: any) {
       throw new Error(
         error.response?.data?.message || 'Failed to fetch products by category'
+      );
+    }
+  }
+
+  /**
+   * The product's FULL category set, from ProductCategoryLink.
+   *
+   * Not the same as `product.category`, which stays a single String ref that
+   * `product.service.ts:104` filters on and the products table's Category column
+   * reads. This is the 954-row `product_tags` join, and it is the only thing that
+   * can show an admin all six categories a product belongs to.
+   */
+  async getProductCategories(id: string): Promise<ProductCategoriesResponse> {
+    try {
+      const response = await api.get(`${this.baseUrl}/${id}/categories`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(
+        error?.message ||
+          error?.response?.data?.message ||
+          'Failed to fetch product categories'
+      );
+    }
+  }
+
+  /**
+   * Replace the product's category set.
+   *
+   * The server REPLACES wholesale rather than merging, and validates every id
+   * before writing any of them: one bad id 400s with the existing links left
+   * intact. So this must always be given the complete set - calling it with a
+   * subset removes the rest.
+   *
+   * `categoryIds` is the key name the server reads, so it is load-bearing.
+   */
+  async setProductCategories(
+    id: string,
+    categoryIds: string[]
+  ): Promise<{ success: boolean; count?: number; message?: string }> {
+    try {
+      const response = await api.put(`${this.baseUrl}/${id}/categories`, {
+        categoryIds,
+      });
+      return response.data;
+    } catch (error: any) {
+      throw new Error(
+        error?.message ||
+          error?.response?.data?.message ||
+          'Failed to update product categories'
       );
     }
   }

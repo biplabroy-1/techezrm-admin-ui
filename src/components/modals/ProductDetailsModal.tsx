@@ -104,8 +104,22 @@ export default function ProductDetailsModal({
     enabled: open && !!productId,
   });
 
+  /**
+   * The product's full category set.
+   *
+   * Separate query from `product` because `product.category` is a single String ref
+   * that stays as the primary. This is what the multi-select wrote, so it is what an
+   * admin needs to see to verify that write.
+   */
+  const { data: categoriesData } = useQuery({
+    queryKey: ['productCategories', productId],
+    queryFn: () => productService.getProductCategories(productId),
+    enabled: open && !!productId,
+  });
+
   const product = productData?.data;
   const variants = variantsData?.data || [];
+  const categories = categoriesData?.categories || [];
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -203,15 +217,60 @@ export default function ProductDetailsModal({
                   color="textSecondary"
                   sx={{ fontWeight: 600 }}
                 >
-                  Category
+                  Categories
                 </Typography>
-                <Chip
-                  label={product?.category?.name || 'Uncategorized'}
-                  color="primary"
-                  variant="outlined"
-                  icon={<CategoryIcon />}
-                  sx={{ mt: 0.5 }}
-                />
+                {/*
+                 * Every category, from the link table.
+                 *
+                 * This showed exactly one - `product.category`, the single String
+                 * ref that stays as the PRIMARY - so a product in six categories
+                 * displayed one of them and an admin had no way to check what the
+                 * multi-select had actually saved. Listing the links is the read-only
+                 * check on that write.
+                 *
+                 * Both are read because a product can be in the links table without
+                 * its primary being among them (the admin's primary is the first
+                 * selected id, which the links endpoint returns in insertion order,
+                 * so they agree in practice - but a hand-edited or migrated product
+                 * need not). Dropping the primary silently would hide a category the
+                 * storefront's filter still matches.
+                 */}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 0.5,
+                    mt: 0.5,
+                  }}
+                >
+                  {categories.length > 0
+                    ? categories.map((category) => (
+                        <Chip
+                          key={category._id}
+                          label={category.name}
+                          color="primary"
+                          variant="outlined"
+                          icon={<CategoryIcon />}
+                          size="small"
+                        />
+                      ))
+                    : [
+                        product?.category?.name ? (
+                          <Chip
+                            key={product.category._id}
+                            label={product.category.name}
+                            color="primary"
+                            variant="outlined"
+                            icon={<CategoryIcon />}
+                            sx={{ mt: 0.5 }}
+                          />
+                        ) : (
+                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                            Uncategorized
+                          </Typography>
+                        ),
+                      ]}
+                </Box>
               </Box>
               <Box>
                 <Typography

@@ -24,6 +24,9 @@ import {
   Card,
   CardContent,
   Divider,
+  Checkbox,
+  ListItemText,
+  FormHelperText,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -39,6 +42,7 @@ import { productService } from '@/api/services/products';
 import { productFiltersService } from '@/api/services';
 import {
   buildUpdateProductFormData,
+  primaryCategoryId,
   type DietaryAttribute,
 } from './buildUpdateProductFormData';
 import {
@@ -93,6 +97,12 @@ export default function EditProductModal({
     moq: 0,
     unit: '',
     appearance: '',
+    /**
+     * The full set of category `_id`s. `category` above stays the primary, which
+     * is what product.service.ts:104 filters on and the products table reads; this
+     * is what becomes the ProductCategoryLink rows.
+     */
+    categoryIds: [] as string[],
     tags: [] as string[],
     specifications: {} as Record<string, string>,
     dietaryAttributes: [] as DietaryAttribute[],
@@ -124,6 +134,28 @@ export default function EditProductModal({
     enabled: open, // Only fetch when modal is open
   });
 
+  /**
+   * The product's existing category links, so the multi-select opens showing what is
+   * actually stored rather than blank.
+   *
+   * Fetched separately from `product`, because `Products.category` is a single ref
+   * and the other links only exist in ProductCategoryLink. Without this the select
+   * would render empty for a product in six categories, and the admin's first save
+   * would replace all six with whatever the (apparently empty) form showed.
+   */
+  const { data: productCategoriesData } = useQuery({
+    queryKey: ['productCategories', product._id],
+    queryFn: () => productService.getProductCategories(product._id),
+    enabled: open && !!product._id,
+  });
+
+  // The links may arrive AFTER the form was initialised from `product`, so this is
+  // seeded from the query result too. `?? []` rather than a fallback to
+  // `[product.category]`: a half-known set that silently seeds one category would
+  // make the next save drop the other five.
+  const storedCategoryIds: string[] =
+    productCategoriesData?.categories?.map((c) => c._id) ?? [];
+
   // Unit options
   const unitOptions = [
     'kg',
@@ -148,15 +180,32 @@ export default function EditProductModal({
     'capsule',
   ];
 
-  // Category options from API
+  /**
+   * Category options from the API, as `{ _id, name }`.
+   *
+   * The value is the `_id`, not the name. The single-category version of this
+   * control mapped over `.name` and used the NAME as the value, so it stored a
+   * label where the schema wants an id - which is why the multi-select has to carry
+   * `_id` through: ProductCategoryLink has a real ObjectId `categoryId` with a
+   * `ref`, and a name would cast to a malformed ObjectId that resolves to nothing.
+   */
   const categoryOptions =
-    filtersData?.data?.category?.categories?.map((cat) => cat.name) || [];
+    filtersData?.data?.category?.categories?.map((cat) => ({
+      id: cat._id,
+      name: cat.name,
+    })) || [];
 
   // Country options from API
   const countryOptions =
     filtersData?.data?.countryOfOrigin?.map((country) => country.name) || [];
 
-  // Initialize form data when product changes
+  // Initialize form data when product changes.
+  //
+  // `categoryIds` is seeded from the links query when it has arrived, and falls
+  // back to the single primary otherwise. The fallback matters: this effect runs on
+  // `product`, which is available immediately, while the links query is not, so
+  // without it the multi-select would flash empty. The second effect below
+  // reconciles once the links land.
   useEffect(() => {
     if (product) {
       setFormData({
@@ -164,6 +213,12 @@ export default function EditProductModal({
         description: product.description || '',
         price: product.price || 0,
         category: product.category || '',
+        categoryIds:
+          storedCategoryIds.length > 0
+            ? storedCategoryIds
+            : product.category
+              ? [product.category]
+              : [],
         inStock: product.inStock ?? true,
         status: product.status || 'active',
         moq: product.moq || 0,
@@ -187,9 +242,64 @@ export default function EditProductModal({
     }
   }, [product]);
 
+  /**
+   * Reconcile the multi-select once the stored links arrive.
+   *
+   * Deliberately NOT merged with the effect above: that one runs on `product`
+   * alone, and folding this in would either wait for the links before showing
+   * anything at all, or re-seed the select on every refetch and discard what the
+   * admin has picked.
+   *
+   * The `open` guard is what stops this from clobbering an in-progress selection
+   * when the query refetches in the background - a refetch while the dialog is open
+   * would otherwise reset the select to the stored set mid-edit.
+   */
+  useEffect(() => {
+    if (!open || !productCategoriesData?.categories) return;
+    setFormData((prev) => ({
+      ...prev,
+      categoryIds: productCategoriesData.categories!.map((c) => c._id),
+      // Keep the primary pointing at a category that still exists. If the stored
+      // primary is not in the link set, fall back to the first link so
+      // Products.category is never left naming a category the links do not include.
+      category: productCategoriesData.categories!.some(
+        (c) => c._id === prev.category
+      )
+        ? prev.category
+        : (productCategoriesData.categories![0]?._id ?? ''),
+    }));
+  }, [open, productCategoriesData]);
+
+  /**
+ * Write the category links.
+ *
+ * Separate from the product update because it is a different endpoint on a
+ * different resource: the product write is multipart (it carries images), the link
+ * write is JSON against `/private/products/:id/categories`. Sequencing them
+ * explicitly - rather than fire-and-forget - is what lets the admin be told when the
+ * links failed. A product whose six categories silently did not save looks exactly
+ * like one that saved correctly until someone goes looking.
+ *
+ * `PUT` replaces wholesale, so this is always given the FULL set. Passing a subset
+ * would remove the rest, and passing nothing would clear every link.
+ */
+  const setCategoriesMutation = useMutation({
+    mutationFn: (categoryIds: string[]) =>
+      productService.setProductCategories(product._id, categoryIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['productCategories', product._id] });
+    },
+  });
+
   // Update product mutation
   const updateProductMutation = useMutation({
-    mutationFn: (data: any) => productService.updateProduct(product._id, data),
+    mutationFn: async (data: any) => {
+      // Awaited, not fired alongside: a failure in either half must not be
+      // reported as a successful save.
+      const response = await productService.updateProduct(product._id, data);
+      await setCategoriesMutation.mutateAsync(formData.categoryIds);
+      return response;
+    },
     onSuccess: () => {
       toast.success('Product updated successfully!');
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -345,8 +455,14 @@ export default function EditProductModal({
     // moving them now would half-apply it.
     // `specifications` is taken from the editor buffer rather than from
     // formData, so a row that was typed into but never blurred is still saved.
+    //
+    // `category` is NOT passed through: the builder derives the primary from
+    // `categoryIds` via `primaryCategoryId`, so a stale `category` cannot disagree
+    // with the multi-select and leave Products.category pointing at a category the
+    // admin just removed.
     const formDataToSend = buildUpdateProductFormData({
       ...formData,
+      category: '',
       specifications: rowsToSpec(specRows),
     });
 
@@ -565,24 +681,69 @@ export default function EditProductModal({
                       />
 
                       <FormControl fullWidth size="small">
-                        <InputLabel>Category</InputLabel>
+                        <InputLabel>Categories</InputLabel>
+                        {/*
+                         * `multiple`, valued on category `_id`s.
+
+                         * The value is the id, not the name. ProductCategoryLink
+                         * declares `categoryId` as a real ObjectId with a `ref` to
+                         * Categories, so a name here would cast to a malformed
+                         * ObjectId and produce a link row that resolves to nothing -
+                         * the exact silently-dangling-reference failure the server's
+                         * parseCategoryIds exists to prevent. An id that is not in
+                         * the options list is filtered out by renderValue below
+                         * rather than shown as a blank chip.
+                         */}
                         <Select
-                          value={formData.category}
-                          onChange={(e) =>
-                            handleInputChange('category', e.target.value)
-                          }
-                          label="Category"
+                          multiple
+                          value={formData.categoryIds}
+                          onChange={(e) => {
+                            const next = e.target.value as string[];
+                            handleInputChange('categoryIds', next);
+                            // Keep the primary in step with the selection so the
+                            // single-ref field and the link set never disagree.
+                            handleInputChange(
+                              'category',
+                              primaryCategoryId({ categoryIds: next })
+                            );
+                          }}
+                          label="Categories"
                           disabled={filtersLoading}
+                          renderValue={(selected) =>
+                            (selected as string[])
+                              .map((id) => categoryOptions.find((c) => c.id === id)?.name ?? id)
+                              .join(', ')
+                          }
                           sx={{
                             borderRadius: 2,
                           }}
                         >
                           {categoryOptions.map((category) => (
-                            <MenuItem key={category} value={category}>
-                              {category}
+                            <MenuItem key={category.id} value={category.id}>
+                              <Checkbox
+                                size="small"
+                                checked={formData.categoryIds.includes(category.id)}
+                              />
+                              <ListItemText primary={category.name} />
                             </MenuItem>
                           ))}
                         </Select>
+                        {/*
+                         * The first selected category is the primary. Said out loud
+                         * in the UI because `Products.category` is still a single
+                         * ref and the products table shows only that one - an admin
+                         * would otherwise have no way to know which category the
+                         * storefront's category filter would match.
+                         */}
+                        <FormHelperText>
+                          {formData.categoryIds.length > 0
+                            ? `Primary: ${
+                                categoryOptions.find(
+                                  (c) => c.id === formData.categoryIds[0]
+                                )?.name ?? formData.categoryIds[0]
+                              }`
+                            : 'No categories selected'}
+                        </FormHelperText>
                       </FormControl>
                     </Box>
                   </Box>

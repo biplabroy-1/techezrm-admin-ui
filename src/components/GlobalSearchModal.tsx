@@ -31,6 +31,11 @@ import {
   Person as PersonIcon,
   Settings as SettingsIcon,
   Message as MessageIcon,
+  // HelpOutline for FAQs and VerifiedUser for certifications: reusing CategoryIcon
+  // for all three would make the three entries indistinguishable in the results
+  // list, which is the one thing this modal is for.
+  HelpOutline as HelpOutlineIcon,
+  VerifiedUser as VerifiedUserIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 
@@ -84,6 +89,35 @@ const searchSuggestions: SearchSuggestion[] = [
     category: 'management',
     icon: <CategoryIcon />,
     keywords: ['categories', 'category', 'classification', 'groups'],
+  },
+  {
+    id: 'faqs',
+    title: 'FAQs',
+    description: 'Manage storefront and product FAQs',
+    path: '/admin/data-management/faqs',
+    category: 'management',
+    icon: <HelpOutlineIcon />,
+    // "question" and "answer" because those are what an admin searching for this
+    // screen will type - searching "faq" alone is less likely than searching the
+    // field being edited.
+    keywords: ['faq', 'faqs', 'questions', 'answers', 'help', 'support'],
+  },
+  {
+    id: 'certification-types',
+    title: 'Certification Types',
+    description: 'Manage certification kinds and their PDFs',
+    path: '/admin/data-management/certifications',
+    category: 'management',
+    icon: <VerifiedUserIcon />,
+    keywords: [
+      'certification',
+      'certifications',
+      'certifications type',
+      'fssai',
+      'iso',
+      'kosher',
+      'halal',
+    ],
   },
   {
     id: 'warehouses',

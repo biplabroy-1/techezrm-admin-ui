@@ -15,12 +15,22 @@ import {
   Chip,
   Divider,
   Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Checkbox,
+  ListItemText,
+  FormHelperText,
 } from '@mui/material';
-import ReactSelect from 'react-select';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import CloseIcon from '@mui/icons-material/Close';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import { useCreateProduct } from '../../hooks/useProducts';
-import type { DietaryAttribute } from './buildUpdateProductFormData';
+import { productFiltersService } from '@/api/services/productFilters';
+import { productService } from '@/api/services/products';
+import { toast } from 'react-toastify';
+import { primaryCategoryId, type DietaryAttribute } from './buildUpdateProductFormData';
 
 interface AddProductModalProps {
   open: boolean;
@@ -71,16 +81,6 @@ const reactSelectStyles = {
   }),
 };
 
-const categories = [
-  { value: 'Amino Acids', label: 'Amino Acids' },
-  { value: 'Vitamins', label: 'Vitamins' },
-  { value: 'Supplements', label: 'Supplements' },
-  { value: 'Protein', label: 'Protein' },
-  { value: 'Pre-workout', label: 'Pre-workout' },
-  { value: 'Chemicals', label: 'Chemicals' },
-  { value: 'Raw Materials', label: 'Raw Materials' },
-];
-
 export default function AddProductModal({
   open,
   onClose,
@@ -100,6 +100,11 @@ export default function AddProductModal({
     // multipart body rather than being forgotten at the type level.
     specifications: {} as Record<string, string>,
     dietaryAttributes: [] as DietaryAttribute[],
+    /**
+     * The full set of category `_id`s. Empty at create, unlike the edit form: the
+     * links are written after the product exists and has an `_id`.
+     */
+    categoryIds: [] as string[],
   });
 
   const [bannerImage, setBannerImage] = useState<File | null>(null);
@@ -108,6 +113,41 @@ export default function AddProductModal({
 
   // Use the simplified mutation hook directly
   const createProduct = useCreateProduct();
+  const queryClient = useQueryClient();
+
+  /**
+   * Real categories, from the same endpoint the edit form uses.
+   *
+   * This form had a hardcoded array of seven NAMES as `value`s. A name cannot be a
+   * ProductCategoryLink `categoryId` - that is a real ObjectId with a `ref` - so a
+   * hardcoded list of names cannot produce valid links at all. The ids are also what
+   * `Products.category` is supposed to hold, so this replaces an option list that
+   * could never have stored a working category.
+   */
+  const { data: filtersData, isLoading: filtersLoading } = useQuery({
+    queryKey: ['productFilters'],
+    queryFn: productFiltersService.getFiltersData,
+    enabled: open,
+  });
+
+  const categoryOptions =
+    filtersData?.data?.category?.categories?.map((cat) => ({
+      id: cat._id,
+      name: cat.name,
+    })) || [];
+
+  /**
+   * Write the links for the freshly created product.
+   *
+   * Separate from the create call because `/private/products/:id/categories` needs
+   * an `_id` that does not exist until the product is created. Awaited inside the
+   * submit handler so a failure is surfaced - a product whose categories silently
+   * did not save is indistinguishable from one that saved correctly.
+   */
+  const setCategoriesMutation = useMutation({
+    mutationFn: ({ productId, categoryIds }: { productId: string; categoryIds: string[] }) =>
+      productService.setProductCategories(productId, categoryIds),
+  });
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -124,8 +164,11 @@ export default function AddProductModal({
       newErrors.price = 'Valid price is required';
     }
 
-    if (!formData.category) {
-      newErrors.category = 'Category is required';
+    // At least one category. Checked against `categoryIds`, not `category`: the
+    // multi-select is the source of truth and `category` is derived from it, so
+    // validating the derived field would let through a state where they disagree.
+    if (formData.categoryIds.length === 0) {
+      newErrors.category = 'At least one category is required';
     }
 
     setErrors(newErrors);
@@ -138,11 +181,13 @@ export default function AddProductModal({
     }
 
     try {
+      // `category` is derived, never read from the field directly, so the single-ref
+      // field and the link set cannot disagree.
       const productData = {
         name: formData.name,
         description: formData.description,
         price: parseFloat(formData.price),
-        category: formData.category,
+        category: primaryCategoryId({ categoryIds: formData.categoryIds }),
         inStock: formData.inStock,
         bannerImage: bannerImage || undefined,
         images: images.length > 0 ? images : undefined,
@@ -154,11 +199,31 @@ export default function AddProductModal({
       const result = await createProduct.mutateAsync(productData);
 
       if (result?.data) {
+        // Only now does the product have an `_id`, so only now can links be
+        // written. Awaited and inside the same try: a failure here surfaces to the
+        // admin rather than leaving a product with no categories and a success toast
+        // already on screen.
+        // `Product` declares `_id` only. `id` is not read as a fallback: reading a field
+        // the type does not have is how a wrong id gets passed to the links endpoint
+        // and 404s there while the product itself saved fine.
+        const createdId = result.data._id;
+        if (createdId && formData.categoryIds.length > 0) {
+          await setCategoriesMutation.mutateAsync({
+            productId: createdId,
+            categoryIds: formData.categoryIds,
+          });
+        }
+
+        queryClient.invalidateQueries({ queryKey: ['products'] });
+        toast.success('Product created successfully!');
         onProductAdded(result.data);
         handleClose();
       }
-    } catch (error) {
-      console.error('Error creating product:', error);
+    } catch (error: any) {
+      // Was `console.error` only, so a failed create produced no user-visible
+      // feedback at all - the dialog stayed open with the form intact and nothing
+      // said why.
+      toast.error(error?.message || 'Failed to create product');
     }
   };
 
@@ -171,6 +236,7 @@ export default function AddProductModal({
       inStock: true,
       specifications: {},
       dietaryAttributes: [],
+      categoryIds: [],
     });
     setBannerImage(null);
     setImages([]);
@@ -178,7 +244,14 @@ export default function AddProductModal({
     onClose();
   };
 
-  const handleInputChange = (field: string, value: string | boolean) => {
+  // `string[]` is in the union because categoryIds is an array. Narrowing to
+  // `string | boolean` is why `handleInputChange('categoryIds', [...])` could not
+  // typecheck, and the cast to `{...prev, [field]: value}` is what makes it sound
+  // for a fixed set of known field names.
+  const handleInputChange = (
+    field: string,
+    value: string | boolean | string[]
+  ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: '' }));
@@ -263,23 +336,62 @@ export default function AddProductModal({
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <ReactSelect
-                options={categories}
-                value={categories.find(
-                  (cat) => cat.value === formData.category
-                )}
-                onChange={(option) =>
-                  handleInputChange('category', option?.value || '')
-                }
-                placeholder="Select Category"
-                styles={reactSelectStyles}
-                isSearchable
-              />
-              {errors.category && (
-                <Typography color="error" variant="caption" sx={{ mt: 1 }}>
-                  {errors.category}
-                </Typography>
-              )}
+              <FormControl fullWidth error={!!errors.category}>
+                <InputLabel>Categories</InputLabel>
+                {/*
+                 * Valued on category `_id`s, matching the edit form. A product
+                 * created with the old hardcoded name list could not produce valid
+                 * ProductCategoryLink rows at all, since `categoryId` is a real
+                 * ObjectId with a `ref`.
+                 */}
+                <Select
+                  multiple
+                  label="Categories"
+                  value={formData.categoryIds}
+                  onChange={(e) => {
+                    const next = e.target.value as string[];
+                    handleInputChange('categoryIds', next);
+                    handleInputChange(
+                      'category',
+                      primaryCategoryId({ categoryIds: next })
+                    );
+                  }}
+                  disabled={filtersLoading}
+                  renderValue={(selected) =>
+                    (selected as string[])
+                      .map(
+                        (id) =>
+                          categoryOptions.find((c) => c.id === id)?.name ?? id
+                      )
+                      .join(', ')
+                  }
+                >
+                  {categoryOptions.map((category) => (
+                    <MenuItem key={category.id} value={category.id}>
+                      <Checkbox
+                        size="small"
+                        checked={formData.categoryIds.includes(category.id)}
+                      />
+                      <ListItemText primary={category.name} />
+                    </MenuItem>
+                  ))}
+                </Select>
+                {/*
+                 * Outside the Select: MUI's Select takes no `helperText`, and this
+                 * message is load-bearing - it names which category the single-ref
+                 * `Products.category` field will hold, which is otherwise invisible.
+                 */}
+                <FormHelperText error={!!errors.category}>
+                  {errors.category ||
+                    (formData.categoryIds.length > 0
+                      ? `Primary: ${
+                          categoryOptions.find(
+                            (c) => c.id === formData.categoryIds[0]
+                          )?.name ?? formData.categoryIds[0]
+                        }`
+                      : ' ')}
+                </FormHelperText>
+              </FormControl>
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <FormControlLabel

@@ -98,3 +98,19 @@ export type {
   ProductFiltersData,
   ProductFiltersResponse,
 } from './productFilters';
+export { certificationTypeService } from './certificationTypes';
+export type {
+  CertificationType,
+  CreateCertificationTypeRequest,
+  CertificationTypeResponse,
+  CertificationTypesListResponse,
+} from './certificationTypes';
+export { faqService } from './faqs';
+export type {
+  FAQ,
+  GetFAQsParams,
+  CreateFAQRequest,
+  FAQOrderUpdate,
+  FAQResponse,
+  FAQsListResponse,
+} from './faqs';
