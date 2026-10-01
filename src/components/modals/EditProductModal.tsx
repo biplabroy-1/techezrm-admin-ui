@@ -41,6 +41,14 @@ import {
   buildUpdateProductFormData,
   type DietaryAttribute,
 } from './buildUpdateProductFormData';
+import {
+  specToRows,
+  specRowAdded,
+  specRowUpdated,
+  specRowRemoved,
+  rowsToSpec,
+  type SpecRow,
+} from './specRows';
 
 interface EditProductModalProps {
   open: boolean;
@@ -100,6 +108,14 @@ export default function EditProductModal({
   const [countryInput, setCountryInput] = useState('');
   const [bannerImageInput, setBannerImageInput] = useState('');
   const [imageInput, setImageInput] = useState('');
+  /**
+   * Editing buffer for the specifications editor. `formData.specifications` is
+   * what actually gets saved; the rows are what is on screen. They are kept in
+   * step by `applySpecRows` and by the field blur handlers, and read straight
+   * from the buffer in `handleSubmit` so an edit cannot be lost by not having
+   * blurred the field it was typed into.
+   */
+  const [specRows, setSpecRows] = useState<SpecRow[]>(() => specToRows());
 
   // Fetch filter data
   const { data: filtersData, isLoading: filtersLoading } = useQuery({
@@ -164,6 +180,10 @@ export default function EditProductModal({
         bannerImage: product.bannerImage || '',
         images: product.images || [],
       });
+      // Same effect, for the specifications buffer. Not `useState` initialisation:
+      // the modal is reused across products, so an admin who opens a second
+      // product must see that product's spec sheet, not the first one's.
+      setSpecRows(specToRows(product.specifications));
     }
   }, [product]);
 
@@ -285,6 +305,24 @@ export default function EditProductModal({
     }));
   };
 
+  /**
+   * The single place the specifications buffer becomes form state, so a row can
+   * never be on screen without being in the payload.
+   *
+   * `rowsToSpec` drops keyless rows and normalises nothing else - no case
+   * folding, no whitespace collapsing, and not even a trim, because the migrated
+   * data holds both "Shelf Life " and "Shelf Life" and merging them would drop a
+   * spec on every save.
+   */
+  const applySpecRows = (rows: SpecRow[]) => {
+    setSpecRows(rows);
+    handleInputChange('specifications', rowsToSpec(rows));
+  };
+
+  const commitSpecRows = () => {
+    handleInputChange('specifications', rowsToSpec(specRows));
+  };
+
   const handleSubmit = () => {
     if (!formData.name.trim()) {
       toast.error('Product name is required');
@@ -305,7 +343,12 @@ export default function EditProductModal({
     // because they get slugified on the way out, and slugifying a migrated value
     // like "CAS No: 14281-83-5" destroys it. That fix is a separate change and
     // moving them now would half-apply it.
-    const formDataToSend = buildUpdateProductFormData(formData);
+    // `specifications` is taken from the editor buffer rather than from
+    // formData, so a row that was typed into but never blurred is still saved.
+    const formDataToSend = buildUpdateProductFormData({
+      ...formData,
+      specifications: rowsToSpec(specRows),
+    });
 
     if (formData.tags && formData.tags.length > 0) {
       // Convert tag names to slugs
@@ -665,6 +708,114 @@ export default function EditProductModal({
                       </FormControl>
                     </Box>
                   </Box>
+                </CardContent>
+              </Card>
+            </Box>
+
+            {/* Specifications - Form, Color, Packaging, Purity/Assay, Shelf Life.
+                A free key/value list rather than named fields: the migrated data's
+                keys are inconsistent ("Purity/Assay" vs "Purity assay"), so a fixed
+                set of inputs would hide rows the catalogue actually has. Its own
+                full-width card because two inputs plus a chip and a button per row
+                do not fit the half-width column this sits under. */}
+            <Box sx={{ width: '100%' }}>
+              <Card
+                sx={{
+                  height: '100%',
+                  borderRadius: 2,
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                }}
+              >
+                <CardContent>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      mb: 2,
+                      fontWeight: 'bold',
+                      color: '#1F2A44',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      fontSize: '1.1rem',
+                    }}
+                  >
+                    <ViewListIcon sx={{ fontSize: '1rem' }} />
+                    Specifications
+                  </Typography>
+
+                  <Box
+                    sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}
+                  >
+                    {specRows.map((row, index) => (
+                      <Box
+                        key={index}
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                      >
+                        <TextField
+                          label="Key"
+                          value={row.key}
+                          onChange={(e) => {
+                            const { value } = e.target;
+                            setSpecRows((prev) =>
+                              specRowUpdated(prev, index, { key: value })
+                            );
+                          }}
+                          onBlur={commitSpecRows}
+                          size="small"
+                          sx={{
+                            flex: 2,
+                            '& .MuiOutlinedInput-root': { borderRadius: 2 },
+                          }}
+                        />
+                        <TextField
+                          label="Value"
+                          value={row.value}
+                          onChange={(e) => {
+                            const { value } = e.target;
+                            setSpecRows((prev) =>
+                              specRowUpdated(prev, index, { value })
+                            );
+                          }}
+                          onBlur={commitSpecRows}
+                          size="small"
+                          sx={{
+                            flex: 3,
+                            '& .MuiOutlinedInput-root': { borderRadius: 2 },
+                          }}
+                        />
+                        {/* Delete commits as well as removing the row: a
+                            buffer-only delete would come straight back on the
+                            next save. */}
+                        <Chip
+                          label={row.key || 'new row'}
+                          onDelete={() =>
+                            applySpecRows(specRowRemoved(specRows, index))
+                          }
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderRadius: 2 }}
+                        />
+                        <IconButton
+                          onClick={commitSpecRows}
+                          size="small"
+                          aria-label={`Save specification row ${
+                            row.key || index + 1
+                          }`}
+                        >
+                          <SaveIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Box>
+
+                  <Button
+                    variant="outlined"
+                    onClick={() => applySpecRows(specRowAdded(specRows))}
+                    size="small"
+                    sx={{ mt: 2, borderRadius: 2 }}
+                  >
+                    Add Row
+                  </Button>
                 </CardContent>
               </Card>
             </Box>
