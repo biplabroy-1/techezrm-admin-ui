@@ -2,6 +2,25 @@
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import { ENDPOINTS } from './endpoints';
 
+/**
+ * Drop every trace of the dead session and bounce to /login.
+ *
+ * Clearing localStorage alone is not enough: the persisted zustand store
+ * keeps `auth-storage`, so a reload would restore a logged-in shell and the
+ * user would land right back on a page that 401s.
+ */
+const clearSession = () => {
+  localStorage.removeItem('auth-token');
+  localStorage.removeItem('refresh-token');
+  localStorage.removeItem('auth-storage');
+
+  // Never bounce away from the login page itself, or a failed login attempt
+  // turns into a reload loop.
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+};
+
 // Create axios instance
 const api: AxiosInstance = axios.create({
   baseURL: ENDPOINTS.BASE_URL,
@@ -31,35 +50,13 @@ api.interceptors.response.use(
   (response: AxiosResponse) => {
     return response;
   },
-  async (error) => {
-    const originalRequest = error.config;
-
-    // Handle token refresh
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      try {
-        const refreshToken = localStorage.getItem('refresh-token');
-        if (refreshToken) {
-          const response = await axios.post(ENDPOINTS.AUTH.REFRESH, {
-            refreshToken,
-          });
-
-          const { token } = response.data;
-          localStorage.setItem('auth-token', token);
-
-          // Retry original request
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-          }
-          return api(originalRequest);
-        }
-      } catch (refreshError) {
-        // Refresh failed, redirect to login
-        localStorage.removeItem('auth-token');
-        localStorage.removeItem('refresh-token');
-        window.location.href = '/login';
-      }
+  (error) => {
+    // There is no refresh-token flow in this app: the server exposes no
+    // POST /auth/refresh and login returns no refreshToken, so `refresh-token`
+    // in localStorage is never populated. A 401 therefore always means the
+    // session is unrecoverable - clear it and send the user to login.
+    if (error.response?.status === 401) {
+      clearSession();
     }
 
     return Promise.reject(error?.response?.data || error);

@@ -160,7 +160,7 @@ export default function AddSupplierPage() {
           Back to Suppliers
         </Button>
 
-        <Typography variant="h5" sx={{ fontWeight: 600, mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, color: 'text.primary' }}>
           Add Supplier
         </Typography>
 
