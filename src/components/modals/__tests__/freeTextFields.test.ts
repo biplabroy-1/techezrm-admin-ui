@@ -214,3 +214,46 @@ test('the facet dropdowns still read filtersData - only the save path changed', 
   expect(code).toMatch(/filtersData\?\.data\?\.function\?\.map/);
   expect(code).toMatch(/filtersData\?\.data\?\.category\?\.categories\?\.map/);
 });
+
+/* ---- the country picker: code in, name out ---- */
+
+test('the country picker stores a countryCode while showing the country name', () => {
+  // `countryOfOrigin` is the one field whose stored value is a CODE, not prose:
+  // `getFilters` builds the storefront's country facet from `country.countryCode`
+  // and counts products with `countryOfOrigin: { $in: ['IN'] }`, so an admin
+  // picking "India" must store "IN". Before this the dropdown's value was
+  // `country.name`, and the name->code lookup that compensated for it lived on the
+  // save path - so deleting the slugifiers (which is what makes the save verbatim)
+  // would have left "India" in a codes field and silently broken the country
+  // filter for anything added from then on.
+  const code = readComponentCode();
+
+  // The options are the country objects, not a list of names.
+  expect(code).toMatch(
+    /const\s+countryOptions\s*=\s*filtersData\?\.data\?\.countryOfOrigin\s*\|\|\s*\[\]/
+  );
+  expect(code).not.toMatch(/countryOfOrigin\?\.map\(/);
+
+  // Value = the code, label = the name, so the admin still reads "India".
+  expect(code).toMatch(
+    /<MenuItem\s+key=\{country\.countryCode\}\s+value=\{country\.countryCode\}\s*>/
+  );
+  expect(code).toMatch(/\{country\.name\}/);
+});
+
+test('the selected country actually reaches form state', () => {
+  // Guards the guard above: a `value={country.countryCode}` that nothing reads is
+  // decorative. The chain is Select value -> `countryInput` -> `handleAddCountry`
+  // -> `formData.countryOfOrigin`, and the builder sends it verbatim, so all three
+  // links have to hold or the code never reaches the wire.
+  const code = readComponentCode();
+
+  expect(code).toMatch(/<Select\s+value=\{countryInput\}/);
+  expect(code).toMatch(
+    /onChange=\{\(e\) => setCountryInput\(e\.target\.value\)\}/
+  );
+  // ...and the add handler stores the selection unchanged - no re-derivation.
+  expect(code).toMatch(
+    /countryOfOrigin:\s*\[\.\.\.prev\.countryOfOrigin,\s*countryInput\.trim\(\)\]/
+  );
+});

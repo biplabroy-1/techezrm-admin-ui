@@ -195,9 +195,19 @@ export default function EditProductModal({
       name: cat.name,
     })) || [];
 
-  // Country options from API
-  const countryOptions =
-    filtersData?.data?.countryOfOrigin?.map((country) => country.name) || [];
+  // Country options from API, kept as the country objects.
+//
+// The STORED value is the ISO code, not the display name. `getFilters` builds the
+// storefront's country facet from `country.countryCode` and counts products with
+// `countryOfOrigin: { $in: ['IN'] }` (product.controller.ts getFilters,
+// product.service.ts:76-79 and :479), so a name here would store "India" where
+// nothing can match it. The name stays the LABEL, so the admin still reads
+// "India" while the store holds "IN".
+//
+// Reducing these to `.name` used to be compensated for by a name->code lookup on
+// the save path. That lookup went when the slugifiers did - the save is verbatim
+// now - so the mapping has to live here, at the point the value is chosen.
+const countryOptions = filtersData?.data?.countryOfOrigin || [];
 
   // Initialize form data when product changes.
   //
@@ -1342,8 +1352,11 @@ export default function EditProductModal({
                               }}
                             >
                               {countryOptions.map((country) => (
-                                <MenuItem key={country} value={country}>
-                                  {country}
+                                <MenuItem
+                                  key={country.countryCode}
+                                  value={country.countryCode}
+                                >
+                                  {country.name}
                                 </MenuItem>
                               ))}
                             </Select>
