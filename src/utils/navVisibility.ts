@@ -76,3 +76,54 @@ export function roleHas(role: string | undefined | null, permission: Permission)
 
 /** Every role that can see at least one entry, for docs and tests. */
 export const ALL_ROLES: Role[] = ALL;
+/**
+ * The logged-in role, from the auth store or - failing that - from the JWT.
+ *
+ * The store is the normal source, but it only gained `role` recently: sessions
+ * created before that fix hold `user: undefined`, and a guard that trusted the
+ * store alone would have locked those users out of pages they are entitled to.
+ * The token carries the role from sign-in, so it is a reliable fallback and nobody
+ * has to log out and back in to pick this up.
+ *
+ * The token's role is a snapshot, so it may be stale after a role change. That is
+ * acceptable for deciding what to SHOW - the API is the real authority and
+ * re-checks every call against the live role - which is why it is a fallback rather
+ * than the primary source.
+ */
+export function roleFromToken(token: string | null | undefined): string | undefined {
+  if (!token) return undefined;
+  const parts = token.split(".");
+  if (parts.length < 2) return undefined;
+  try {
+    let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    payload += "=".repeat((4 - (payload.length % 4)) % 4);
+    const binary =
+      typeof atob === "function"
+        ? atob(payload)
+        : Buffer.from(payload, "base64").toString("binary");
+    const json = decodeURIComponent(
+      binary
+        .split("")
+        .map((c) => `%${c.charCodeAt(0).toString(16).padStart(2, "0")}`)
+        .join("")
+    );
+    const claims = JSON.parse(json);
+    return typeof claims?.role === "string" ? claims.role : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolve the role to authorise with: the store first, then the token.
+ *
+ * Returns undefined only when neither source knows, and callers MUST treat that as
+ * "no permissions" rather than "assume access" - a guard that fails open is not a
+ * guard.
+ */
+export function resolveRole(
+  storeRole: string | undefined | null,
+  token?: string | null
+): string | undefined {
+  return storeRole || roleFromToken(token) || undefined;
+}

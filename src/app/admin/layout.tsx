@@ -24,7 +24,8 @@ import Image from 'next/image';
 import { useLogout } from '@/hooks/useAuth';
 import { useAuthStore } from '@/store/authStore';
 import GlobalSearchModal from '@/components/GlobalSearchModal';
-import { canSeePath } from '@/utils/navVisibility';
+import { canSeePath, resolveRole } from '@/utils/navVisibility';
+import { Toaster, toast } from 'react-hot-toast';
 import NotificationDropdown from '@/components/NotificationDropdown';
 
 // Define types for our sidebar items with nested dropdowns
@@ -169,7 +170,13 @@ export default function AdminLayout({
   const router = useRouter();
 
   // Auth hooks
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, token } = useAuthStore();
+
+  // Store first, token second - see resolveRole for why.
+  const role = useMemo(
+    () => resolveRole(user?.role, token ?? undefined),
+    [user?.role, token]
+  );
 
   /**
    * The nav filtered to what this role may use.
@@ -183,7 +190,6 @@ export default function AdminLayout({
    * is dropped entirely rather than showing an empty heading.
    */
   const visibleSidebarItems = useMemo<SidebarItem[]>(() => {
-    const role = user?.role;
 
     // Recurses into nestedOptions as well as options. Logistics > Warehouse is a
     // NESTED dropdown holding Add/Delete/Update/View Stock, so filtering only the
@@ -224,7 +230,7 @@ export default function AdminLayout({
       out.push(item);
     }
     return out;
-  }, [user?.role]);
+  }, [role]);
   const logoutMutation = useLogout();
 
   // Add mounted state to prevent hydration issues
@@ -293,6 +299,45 @@ export default function AdminLayout({
       return;
     }
   }, [mounted, isAuthenticated]);
+
+  /**
+   * Route guard: a page this role may not use never renders.
+   *
+   * Hiding the nav item is presentation only - anyone can type the URL, and the
+   * page shell would load before the API returned 403. This closes that gap, so a
+   * gated page redirects to the dashboard and says why.
+   *
+   * The API remains the real authority: it re-checks every call against the live
+   * role. This exists so a blocked user gets a clear message instead of a page of
+   * broken panels, and so the UI never claims access it does not have.
+   *
+   * Fails CLOSED: if the role cannot be determined, the gated page is refused. A
+   * guard that assumed access when it could not tell would be worse than none.
+   */
+  const [blockedPath, setBlockedPath] = useState<string | null>(null);
+  useEffect(() => {
+    if (!mounted) return;
+    // Wait until the persisted store has rehydrated, otherwise a refresh would
+    // read an empty user and bounce a legitimate admin off the page.
+    if (!isAuthenticated) return;
+
+    if (canSeePath(role, pathname)) {
+      setBlockedPath(null);
+      return;
+    }
+
+    // Only redirect on an actual change of page, not on the first render of a
+    // route the user was already on when their session loaded.
+    setBlockedPath(pathname);
+    router.replace('/admin/dashboard');
+  }, [mounted, isAuthenticated, role, pathname, router]);
+
+  // Explain after the redirect, so the message is not thrown away with the page.
+  useEffect(() => {
+    if (!blockedPath) return;
+    toast.error('You do not have access to that page.');
+    setBlockedPath(null);
+  }, [blockedPath]);
 
   // Handle item click (including logout)
   const handleItemClick = (item: SidebarItem) => {
@@ -889,6 +934,12 @@ export default function AdminLayout({
       >
         {children}
       </Box>
+
+      {/* Mounted here because react-hot-toast needs a single Toaster in the tree,
+          and there was none anywhere in the admin - so every toast the admin
+          raised (supplier created, location filled, and now the route guard) was
+          being created and never shown. */}
+      <Toaster position="top-center" />
     </Box>
   );
 }
