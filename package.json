@@ -28,7 +28,6 @@
     "next": "15.3.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-hot-toast": "^2.5.2",
     "react-leaflet": "^5.0.0",
     "react-select": "^5.10.2",
     "react-toastify": "^11.0.5",

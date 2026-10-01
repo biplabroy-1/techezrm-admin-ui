@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { purchaseOrderService } from '../api/services/purchaseOrders';
-import { toast } from 'react-hot-toast';
+import { toast } from 'react-toastify';
 
 // Simple purchase order queries
 export const usePurchaseOrders = (params = {}) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { toast } from "react-hot-toast";
+import { toast } from 'react-toastify';
 import { api } from "@/api/config";
 import { ENDPOINTS } from "@/api/config/endpoints";
 

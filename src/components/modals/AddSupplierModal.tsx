@@ -16,7 +16,7 @@ import {
   supplierService,
   CreateSupplierRequest,
 } from '../../api/services/suppliers';
-import { toast } from 'react-hot-toast';
+import { toast } from 'react-toastify';
 import { useFillFromLocation } from '@/hooks/useFillFromLocation';
 import { SUPPLIER_PAYMENT_METHODS } from '@/constants/suppliers';
 

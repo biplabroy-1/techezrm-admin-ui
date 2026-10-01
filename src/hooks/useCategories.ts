@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { categoryService } from '../api/services/categories';
-import { toast } from 'react-hot-toast';
+import { toast } from 'react-toastify';
 
 // Simple category queries
 export const useCategories = (params = {}) => {

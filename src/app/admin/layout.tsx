@@ -25,7 +25,7 @@ import { useLogout } from '@/hooks/useAuth';
 import { useAuthStore } from '@/store/authStore';
 import GlobalSearchModal from '@/components/GlobalSearchModal';
 import { canSeePath, resolveRole } from '@/utils/navVisibility';
-import { Toaster, toast } from 'react-hot-toast';
+import { toast } from 'react-toastify';
 import NotificationDropdown from '@/components/NotificationDropdown';
 
 // Define types for our sidebar items with nested dropdowns
@@ -935,11 +935,6 @@ export default function AdminLayout({
         {children}
       </Box>
 
-      {/* Mounted here because react-hot-toast needs a single Toaster in the tree,
-          and there was none anywhere in the admin - so every toast the admin
-          raised (supplier created, location filled, and now the route guard) was
-          being created and never shown. */}
-      <Toaster position="top-center" />
     </Box>
   );
 }

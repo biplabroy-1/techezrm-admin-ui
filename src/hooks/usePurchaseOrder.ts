@@ -9,7 +9,7 @@ import {
   purchaseOrderSchema,
   CreatePurchaseOrderData,
 } from '../utils/validation/purchaseOrderValidation';
-import { toast } from 'react-hot-toast';
+import { toast } from 'react-toastify';
 
 export const usePurchaseOrders = () => {
   const queryClient = useQueryClient();

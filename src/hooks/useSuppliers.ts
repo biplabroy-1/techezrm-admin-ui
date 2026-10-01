@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supplierService } from '../api/services/suppliers';
-import { toast } from 'react-hot-toast';
+import { toast } from 'react-toastify';
 
 // Simple supplier queries
 export const useSuppliers = (params = {}) => {

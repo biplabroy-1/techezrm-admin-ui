@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { productService } from '../api/services/products';
-import { toast } from 'react-hot-toast';
+import { toast } from 'react-toastify';
 
 // Simple product queries
 export const useProducts = (params = {}) => {
