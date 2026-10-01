@@ -40,6 +40,8 @@ import {
   buildFaqPayload,
   swapOrderUpdates,
   nextFaqOrder,
+  makeReorderNoop,
+  isReorderNoop,
   type FAQFormState,
 } from './faqForm';
 
@@ -81,6 +83,19 @@ function truncate(text: string, max = 80): string {
   if (!text) return '';
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
+
+/**
+ * What a reorder that found nothing to do returns.
+ *
+ * A unique symbol, not `undefined` or `null`, because react-query counts a resolved
+ * `undefined` as SUCCESS and calls `onSuccess` - so an early return in `mutationFn`
+ * still toasted "FAQ moved up" for a move that never happened. A symbol cannot
+ * collide with a real `FAQResponse`, and comparing against it is unambiguous.
+ *
+ * Built per-module and matched by identity through `isReorderNoop`, so the guard is
+ * unit testable without depending on this copy.
+ */
+const REORDER_NOOP = makeReorderNoop();
 
 const EMPTY_FORM: FAQFormState = {
   question: '',
@@ -238,17 +253,29 @@ export default function FAQsListing() {
    * the down button on the last row of the last.
    */
   const reorderMutation = useMutation({
+    // Returns a SENTINEL when there is nothing to do, so `onSuccess` can tell a real
+    // move from a no-op.
+    //
+    // Returning `undefined` did not work: react-query treats a resolved `undefined`
+    // as success and calls `onSuccess` regardless, so the early `if (!updates.length)
+    // return` still toasted "FAQ moved up" for a move that never happened. That is
+    // unreachable today because both buttons disable at the page boundaries - but it
+    // is a landmine for whoever changes a boundary, and it would report a no-op as a
+    // success. The sentinel is deliberately impossible to confuse with a real result.
     mutationFn: async ({ index, direction }: { index: number; direction: -1 | 1 }) => {
       const updates = swapOrderUpdates(faqs, index, direction);
       // Nothing to do - the neighbour is off this page. Skip the request rather
       // than send a no-op and report it as a success.
-      if (!updates.length) return;
+      if (!updates.length) return REORDER_NOOP;
       return faqService.bulkUpdateOrders(updates);
     },
-    onSuccess: (_result, variables) => {
-      // Was silent. A reorder has no other visible effect until the list refetches,
-      // so without this the admin clicks the button and gets no confirmation that
-      // anything happened - indistinguishable from the bug above.
+    onSuccess: (result, variables) => {
+      // Silent on a no-op: nothing moved, so there is nothing to confirm. `undefined`
+      // is deliberately NOT the sentinel - see the note on REORDER_NOOP.
+      if (isReorderNoop(result, REORDER_NOOP)) return;
+      // Otherwise silent-but-wrong. A reorder has no visible effect until the list
+      // refetches, so without this the admin clicks the button and cannot tell it
+      // worked - indistinguishable from the tie bug the swap guard prevents.
       toast.success(
         variables.direction === -1 ? 'FAQ moved up' : 'FAQ moved down'
       );

@@ -4,6 +4,8 @@ import {
   buildFaqPayload,
   swapOrderUpdates,
   nextFaqOrder,
+  makeReorderNoop,
+  isReorderNoop,
   type FAQFormState,
 } from '../faqForm';
 
@@ -192,4 +194,40 @@ test('a new FAQ is created after the highest order in the collection', () => {
 test('an empty collection starts at order 0', () => {
   expect(nextFaqOrder(undefined)).toBe(0);
   expect(nextFaqOrder(Number.NaN)).toBe(0);
+});
+
+/* ---- I5 (round 2): a no-op reorder must be distinguishable from a real one ---- */
+
+test('a no-op sentinel is recognised as a no-op', () => {
+  const noop = makeReorderNoop();
+  expect(isReorderNoop(noop, noop)).toBe(true);
+});
+
+test('a real result is never mistaken for the no-op', () => {
+  const noop = makeReorderNoop();
+
+  // Including undefined and null: those are exactly what a careless sentinel choice
+  // would use, and react-query counts a resolved undefined as SUCCESS - so if the
+  // guard matched `undefined` the success toast would fire for a move that never
+  // happened, which is the bug this exists to prevent.
+  expect(isReorderNoop({ success: true }, noop)).toBe(false);
+  expect(isReorderNoop(undefined, noop)).toBe(false);
+  expect(isReorderNoop(null, noop)).toBe(false);
+  expect(isReorderNoop(0, noop)).toBe(false);
+  expect(isReorderNoop('', noop)).toBe(false);
+  expect(isReorderNoop(false, noop)).toBe(false);
+});
+
+test('a sentinel from another module instance is not this one', () => {
+  // Two module copies would each build their own Symbol, and identity would say
+  // "not a no-op". That is the safe direction to fail: a spurious toast is a smaller
+  // harm than a swallowed one.
+  expect(isReorderNoop(makeReorderNoop(), makeReorderNoop())).toBe(false);
+});
+
+test('the sentinel cannot be forged by an API response', () => {
+  // A JSON response can never contain a Symbol, so no server payload can masquerade
+  // as the no-op and suppress a legitimate success toast.
+  const noop = makeReorderNoop();
+  expect(isReorderNoop(JSON.parse('{"success":true,"count":2}'), noop)).toBe(false);
 });

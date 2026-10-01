@@ -126,3 +126,32 @@ export function nextFaqOrder(maxOrder: number | undefined): number {
   if (maxOrder === undefined || !Number.isFinite(maxOrder)) return 0;
   return maxOrder + 1;
 }
+
+/**
+ * What a reorder that found nothing to do must return.
+ *
+ * react-query treats a resolved `undefined` as SUCCESS and calls `onSuccess`, so
+ * `mutationFn` returning `undefined` for a no-op still ran the success path - which
+ * toasted "FAQ moved up" for a move that never happened, and refetched the list for
+ * nothing. Unreachable today because both buttons disable at the page boundaries, but
+ * a landmine for whoever changes one.
+ *
+ * `symbol`, not `unique symbol`: the latter only applies to a `const` declaration and
+ * cannot be a return type, which is why this is a factory. Exported as a factory
+ * rather than a shared singleton so a test can build a distinct sentinel and compare
+ * by identity without depending on the page's copy.
+ */
+export function makeReorderNoop(): symbol {
+  return Symbol('reorder-noop');
+}
+
+/**
+ * True when a reorder result means "nothing moved".
+ *
+ * By identity against the caller's own sentinel: a fresh Symbol is never equal to any
+ * other, so a genuine `FAQResponse` - including `undefined` or `null` from some
+ * future API change - can never be mistaken for the no-op.
+ */
+export function isReorderNoop(result: unknown, noop: symbol): boolean {
+  return result === noop;
+}

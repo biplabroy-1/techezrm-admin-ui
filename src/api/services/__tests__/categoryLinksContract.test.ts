@@ -137,11 +137,40 @@ test('the FAQ screen removes FAQs through the soft-delete endpoint', () => {
   // migrated rows a hard delete is unrecoverable, and the migration script refuses a
   // non-empty target, so a re-import is not a safety net.
   expect(faqs).toContain('/soft-delete');
-  // The page must call the soft delete, not the hard one.
-  expect(page).toContain('faqService.softDelete');
-  expect(page).not.toContain('faqService.remove');
-  // ...and must not reach for a raw axios delete either.
-  expect(page).not.toMatch(/api\.delete/);
+
+  // The page must call the soft delete, not the hard one. Comment-stripped: the
+  // deleteMutation docstring names BOTH endpoints in order to explain the choice, so
+  // matching raw source would find `remove` in prose.
+  const code = readAppCode('faqs/page.tsx');
+  expect(code).toContain('faqService.softDelete');
+  expect(code).not.toContain('faqService.remove');
+
+  // ...and must not reach past the service for a raw axios call either. Every HTTP
+  // verb is checked, not just delete, because a page that bypassed faqService
+  // entirely would evade the check above.
+  //
+  // This replaces a previous `not.toMatch(/api\.delete/)`, which was VACUOUS: `api.`
+  // appeared zero times in the page, so the assertion could never fail and would have
+  // stayed green through any number of hard deletes.
+  expect(code).not.toMatch(/\bapi\.(get|post|put|patch|delete)\b/);
+
+  // The service keeps a hard `remove` for other callers, so assert the page is what
+  // avoids it - not that the method is gone.
+  expect(faqs).toContain('async remove(');
+  expect(faqs).toContain('async softDelete(');
+});
+
+test('the service exposes BOTH deletes, and only the page distinguishes them', () => {
+  // Guards the shape of the test above. If a future change removed `softDelete` from
+  // the service, `expect(faqs).toContain('/soft-delete')` and the page assertions
+  // would still be checking something coherent, so the intent is pinned here: both
+  // methods exist, and the choice of which to call belongs to the screen.
+  const faqs = read('faqs.ts');
+
+  expect(faqs).toMatch(/async remove\([\s\S]*?api\.delete\(`\$\{this\.baseUrl\}\/\$\{id\}`/);
+  expect(faqs).toMatch(
+    /async softDelete\([\s\S]*?api\.patch\(`\$\{this\.baseUrl\}\/\$\{id\}\/soft-delete`/
+  );
 });
 
 test('the soft delete is a PATCH, matching the route the server registers', () => {
@@ -151,13 +180,35 @@ test('the soft delete is a PATCH, matching the route the server registers', () =
   expect(faqs).toMatch(/api\.patch\(`\$\{this\.baseUrl\}\/\$\{id\}\/soft-delete`/);
 });
 
-test('the FAQ screen confirms a reorder to the admin', () => {
-  const page = readApp('faqs/page.tsx');
+test('the FAQ screen confirms a reorder to the admin, but stays silent on a no-op', () => {
+  // Comment-stripped and scoped to the reorderMutation declaration: the surrounding
+  // file carries comments that mention both `onSuccess` and `toast.success`, so a
+  // looser pattern matches prose rather than the code under test.
+  const code = readAppCode('faqs/page.tsx');
+  const declStart = code.indexOf('const reorderMutation');
+  expect(declStart).toBeGreaterThan(-1);
+  const reorder = code.slice(declStart, code.indexOf('function openAdd', declStart));
 
   // A reorder has no visible effect until the list refetches, so without a success
-  // toast the admin clicks the button and cannot tell it worked - which is
-  // indistinguishable from the tie bug the swap guard exists to prevent.
-  expect(page).toMatch(/reorderMutation[\s\S]{0,900}?onSuccess[\s\S]{0,300}?toast\.success/);
+  // toast the admin clicks the button and cannot tell it worked - indistinguishable
+  // from the tie bug the swap guard prevents.
+  expect(reorder).toMatch(/onSuccess[\s\S]*?toast\.success/);
+
+  // ...but a move that found nothing to do must NOT claim success. react-query counts
+  // a resolved `undefined` as success and calls `onSuccess`, so an unguarded early
+  // return toasted "FAQ moved up" for a move that never happened.
+  expect(reorder).toMatch(/if\s*\(\s*isReorderNoop\(result,\s*REORDER_NOOP\)\s*\)\s*return;/);
+  expect(reorder).toMatch(/mutationFn[\s\S]*?return REORDER_NOOP;/);
+
+  // The guard must come BEFORE the toast, or it guards nothing.
+  // Order matters: a guard placed after the toast guards nothing. Compared as
+  // numbers via Number(), because `String.prototype.indexOf` is typed to return a
+  // number but the shim's `expect` is untyped `any` and arithmetic on that trips tsc.
+  const guardAt = Number(reorder.indexOf('isReorderNoop(result'));
+  const toastAt = Number(reorder.indexOf('toast.success'));
+  expect(guardAt).toBeGreaterThan(-1);
+  expect(toastAt).toBeGreaterThan(-1);
+  expect(guardAt).toBeLessThan(toastAt);
 });
 
 test('the FAQ screen takes a new FAQ order from the collection, not the page', () => {
@@ -228,17 +279,125 @@ test('the FAQ key filter offers exactly the enum the schema allows', () => {
 const readApp = (p: string) =>
   readFileSync(join(SRC, '..', '..', 'app', 'admin', 'data-management', p), 'utf8');
 
-test('the FAQ screen delegates the swap to the tested pure function', () => {
-  const page = readApp('faqs/page.tsx');
+/**
+ * A page source with every comment stripped.
+ *
+ * MANDATORY before matching a page for a call, and this file was bitten by exactly
+ * that twice:
+ *
+ *  1. The `maxOrderQuery` declaration carries a JSDoc block that QUOTES the very
+ *     params under test, so `toContain("sortOrder: 'desc'")` passed on the comment
+ *     while the real query had lost the parameter.
+ *  2. Every one of these three page comments names the helper it is supposed to be
+ *     calling - `buildFaqPayload`, `buildCertPayload`, `swapOrderUpdates` - in order
+ *     to explain why the call matters. So `toContain('buildFaqPayload')` is satisfied
+ *     by the prose alone.
+ *
+ * A comment quoting a string is indistinguishable from code calling it, so any
+ * assertion that a page CALLS a helper must run against stripped source.
+ */
+function readAppCode(p: string): string {
+  return readApp(p)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+}
+
+/** Byte offsets of each `identifier(` in the source. */
+function callSites(code: string, identifier: string): number[] {
+  const out: number[] = [];
+  // `RegExp` rather than `matchAll`: `matchAll` requires the `g` flag AND an ES2020+
+  // lib, and the iterator types add nothing here.
+  const re = new RegExp(`${identifier}\\s*\\(`, 'g');
+  let m: RegExpExecArray | null = re.exec(code);
+  while (m !== null) {
+    out.push(m.index);
+    m = re.exec(code);
+  }
+  return out;
+}
+
+/** The source around each call, for readable failure output. */
+function callContext(code: string, identifier: string): string {
+  return callSites(code, identifier)
+    .map((i) => code.slice(Math.max(0, i - 80), i + 120).replace(/\s+/g, ' '))
+    .join(' | ');
+}
+
+test('the FAQ screen CALLS swapOrderUpdates rather than inlining the swap', () => {
+  const page = readAppCode('faqs/page.tsx');
 
   // The swap logic - including the tie guard, which is the part that was wrong -
-  // lives in faqForm.ts and is unit tested there. What matters here is that the page
-  // CALLS it rather than inlining an array literal, so the two cannot drift: the
-  // page used to build `{ id, order }` pairs inline, which is exactly what the naive
-  // no-op-on-tie version was.
-  expect(page).toContain('swapOrderUpdates');
-  expect(page).toContain('faqService.bulkUpdateOrders(updates)');
+  // lives in faqForm.ts and is unit tested there. What has to hold is that the page
+  // CALLS it, not that it mentions it: an inlined two-element swap is a no-op on a
+  // tie, and every comment in this file names the helper, so a plain `toContain`
+  // passes against exactly the regression it exists to catch.
+  expect(callSites(page, 'swapOrderUpdates')).toHaveLength(1);
+
+  // ...and that the result is what gets sent, so the swap cannot be computed and
+  // then discarded in favour of a separately-built array.
+  expect(page).toMatch(/faqService\.bulkUpdateOrders\(\s*updates\s*\)/);
+
+  // The negative, re-anchored: the old inline shape must be gone from the code.
   expect(page).not.toMatch(/bulkUpdateOrders\(\s*\[\s*\{ id:/);
+  expect(page).not.toMatch(/\{\s*id:\s*\w+\.order\s*,\s*order:/);
+});
+
+test('the FAQ screen CALLS buildFaqPayload rather than inlining the payload', () => {
+  const page = readAppCode('faqs/page.tsx');
+
+  expect(callSites(page, 'buildFaqPayload')).toHaveLength(1);
+  // The payload must be the builder's RETURN VALUE, or the call is decorative.
+  expect(page).toMatch(/const\s+payload\s*=\s*buildFaqPayload\(/);
+
+  // The old inline shape: `entityId: ... || undefined`. That is the I1 bug - mongoose
+  // strips undefined, so the stored product attachment survived a save that reported
+  // success while the field's helper text promised "Leave blank for a global FAQ".
+  expect(page).not.toMatch(/entityId:[^,\n]*\|\|\s*undefined/);
+  expect(page).not.toMatch(/entityType:[^,\n]*\|\|\s*undefined/);
+});
+
+test('the certification screen CALLS both cert payload builders', () => {
+  const page = readAppCode('certifications/page.tsx');
+
+  expect(callSites(page, 'buildCertPayload')).toHaveLength(1);
+  expect(callSites(page, 'buildCertTogglePayload')).toHaveLength(1);
+  expect(page).toMatch(/const\s+payload\s*=\s*buildCertPayload\(/);
+
+  // The old conditional spread, which omitted the key entirely. That made the "PDF
+  // uploaded" chip's own onDelete - a control whose entire purpose is clearing
+  // fileUrl - a complete no-op.
+  expect(page).not.toMatch(/\.\.\.\(\s*form\.fileUrl\s*\?\s*\{/);
+  expect(page).not.toMatch(/iconName:[^,\n]*\|\|\s*undefined/);
+});
+
+test('the builders are the only payloads the screens construct', () => {
+  // A belt-and-braces sweep: no screen may hand-roll a `question:`/`name:` payload
+  // literal, which is how an inline copy reappears after the builder is wired up.
+  const faqPage = readAppCode('faqs/page.tsx');
+  expect(faqPage).not.toMatch(/question:\s*form\.question/);
+  expect(faqPage).not.toMatch(/answer:\s*form\.answer/);
+
+  const certPage = readAppCode('certifications/page.tsx');
+  expect(certPage).not.toMatch(/name:\s*form\.name/);
+  expect(certPage).not.toMatch(/isActive:\s*!type\.isActive/);
+});
+
+test('the helper call sites are real statements, not identifiers in strings', () => {
+  // Guards the guard: if these two assertions ever become vacuous, a reviewer reading
+  // only the test names would assume the call sites are pinned. Asserting the shape
+  // of what we found keeps the next mutation honest.
+  const faqPage = readAppCode('faqs/page.tsx');
+  expect(callContext(faqPage, 'swapOrderUpdates')).toMatch(
+    /const updates = swapOrderUpdates\(/
+  );
+  expect(callContext(faqPage, 'buildFaqPayload')).toMatch(
+    /const payload = buildFaqPayload\(form\)/
+  );
+
+  const certPage = readAppCode('certifications/page.tsx');
+  expect(callContext(certPage, 'buildCertTogglePayload')).toMatch(
+    /buildCertTogglePayload\(\s*\{/
+  );
 });
 
 test('the certification screen uploads through the endpoint that exists', () => {
