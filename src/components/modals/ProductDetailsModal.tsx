@@ -764,15 +764,28 @@ export default function ProductDetailsModal({
                           {attr.title}
                         </Typography>
                         {attr.logo && (
-                          <Box sx={{ mb: 1 }}>
-                            <Image
-                              src={attr.logo}
-                              alt={attr.title}
-                              width={40}
-                              height={40}
-                              style={{ objectFit: 'contain' }}
-                            />
-                          </Box>
+                          /*
+                           * `logo` is the MUI ICON NAME from the certification
+                           * catalogue - "FileCheck", "USFDAIcon" - not an image URL.
+                           * It was being handed to `<Image src>`, which made the
+                           * browser request the literal string "FileCheck" as a
+                           * relative path: a broken-image icon on all 236 products
+                           * that carry certifications, and a 404 in the network tab
+                           * for each. The catalogue stores the NAME and the
+                           * storefront resolves it; admin-ui has no icon registry to
+                           * resolve it against, so it shows the name as text, which
+                           * is the field's real content.
+                           *
+                           * The certification PDF below is a real URL and still
+                           * renders as a link.
+                           */
+                          <Typography
+                            variant="caption"
+                            color="textSecondary"
+                            sx={{ display: 'block', mb: 1 }}
+                          >
+                            Icon: {attr.logo}
+                          </Typography>
                         )}
                         {attr.certificateLink && (
                           <Typography variant="caption" color="primary">

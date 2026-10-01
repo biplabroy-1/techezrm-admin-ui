@@ -29,8 +29,15 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import { useCreateProduct } from '../../hooks/useProducts';
 import { productFiltersService } from '@/api/services/productFilters';
 import { productService } from '@/api/services/products';
+import { certificationTypeService, type CertificationType } from '@/api/services';
 import { toast } from 'react-toastify';
 import { primaryCategoryId, type DietaryAttribute } from './buildUpdateProductFormData';
+import {
+  attachableCertifications,
+  attachCertification,
+  detachCertificationAt,
+  isRetiredCertification,
+} from './certificationPicker';
 
 interface AddProductModalProps {
   open: boolean;
@@ -95,9 +102,11 @@ export default function AddProductModal({
     price: '',
     category: '',
     inStock: true,
-    // Not editable in this form yet (no editor UI, same as dietaryAttributes on
-    // the product list) but declared so the pair is threaded through to the
-    // multipart body rather than being forgotten at the type level.
+    // `specifications` still has no editor UI here - it is declared so the field is
+    // threaded through to the multipart body rather than forgotten at the type
+    // level. `dietaryAttributes` DID have that gap and now has the same picker the
+    // edit form uses, so a product can be created holding its certifications
+    // instead of being born empty and needing a second save to attach them.
     specifications: {} as Record<string, string>,
     dietaryAttributes: [] as DietaryAttribute[],
     /**
@@ -135,6 +144,44 @@ export default function AddProductModal({
       id: cat._id,
       name: cat.name,
     })) || [];
+
+  /**
+   * The global catalogue of certifications, on the same query key the edit form and
+   * the certifications admin screen use - so all three share one cache entry.
+   */
+  const { data: certTypesData, isLoading: certTypesLoading } = useQuery({
+    queryKey: ['certificationTypes'],
+    queryFn: certificationTypeService.getAll,
+    enabled: open,
+  });
+
+  const certTypes: CertificationType[] = certTypesData?.data ?? [];
+
+  /**
+   * Empty at create, so this is the whole catalogue, filtered to the active rows -
+   * but it goes through the same helper the edit form uses rather than rendering
+   * `certTypes` directly, so "which rows may be attached" and "in what order" is
+   * decided in exactly one place. If that rule changes, both forms change.
+   */
+  const attachableCerts = attachableCertifications(
+    certTypes,
+    formData.dietaryAttributes
+  );
+
+  const addCertification = (cert: CertificationType) => {
+    setFormData((prev) => ({
+      ...prev,
+      dietaryAttributes: attachCertification(prev.dietaryAttributes, cert),
+    }));
+  };
+
+  /** By index: two chips can carry the same title, and a click means one of them. */
+  const removeCertification = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      dietaryAttributes: detachCertificationAt(prev.dietaryAttributes, index),
+    }));
+  };
 
   /**
    * Write the links for the freshly created product.
@@ -407,6 +454,89 @@ export default function AddProductModal({
               />
             </Grid>
           </Grid>
+
+          {/*
+           * The same picker `EditProductModal` uses, and the same helper module
+           * behind it. Its `logo` is an icon NAME and its link is the catalogue's
+           * PDF, neither of which is editable per product - the whole field is a
+           * selection, so it is presented as one rather than as three free-text
+           * boxes that could store a value the storefront cannot render.
+           */}
+          <Box sx={{ mt: 3 }}>
+            <Typography
+              variant="h6"
+              sx={{ mb: 2, fontFamily: 'Poppins, sans-serif' }}
+            >
+              Certifications
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Select Certification</InputLabel>
+                <Select
+                  value=""
+                  displayEmpty
+                  onChange={(e) => {
+                    const picked = attachableCerts.find(
+                      (c) => c._id === e.target.value
+                    );
+                    // Looked up out of `attachableCerts` rather than trusted from
+                    // the event: a re-render between the click and this handler can
+                    // leave a stale id, and `undefined.name` would take the dialog
+                    // down.
+                    if (picked) addCertification(picked);
+                  }}
+                  label="Select Certification"
+                  disabled={certTypesLoading || attachableCerts.length === 0}
+                >
+                  {attachableCerts.map((cert) => (
+                    <MenuItem key={cert._id} value={cert._id}>
+                      {cert.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  const picked = attachableCerts[0];
+                  if (picked) addCertification(picked);
+                }}
+                disabled={certTypesLoading || attachableCerts.length === 0}
+              >
+                Add
+              </Button>
+            </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 1,
+                minHeight: 40,
+                mb: 1,
+              }}
+            >
+              {formData.dietaryAttributes.length === 0 ? (
+                <Typography variant="caption" color="textSecondary">
+                  No certifications attached
+                </Typography>
+              ) : (
+                formData.dietaryAttributes.map((attr, index) => (
+                  <Chip
+                    key={`${attr.title}-${index}`}
+                    label={attr.title}
+                    onDelete={() => removeCertification(index)}
+                    color="primary"
+                    variant="outlined"
+                  />
+                ))
+              )}
+            </Box>
+            <FormHelperText>
+              {formData.dietaryAttributes.length === 0
+                ? 'Optional. Only certifications still active in the catalogue can be attached.'
+                : `${formData.dietaryAttributes.length} attached. The icon name and the PDF link come from the catalogue.`}
+            </FormHelperText>
+          </Box>
 
           {/* Banner Image Upload */}
           <Box sx={{ mt: 3 }}>

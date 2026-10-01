@@ -35,11 +35,16 @@ import {
   ViewList as ViewListIcon,
   Info as InfoIcon,
   Category as CategoryIcon,
+  Verified as VerifiedIcon,
 } from '@mui/icons-material';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { productService } from '@/api/services/products';
-import { productFiltersService } from '@/api/services';
+import {
+  productFiltersService,
+  certificationTypeService,
+  type CertificationType,
+} from '@/api/services';
 import {
   buildUpdateProductFormData,
   primaryCategoryId,
@@ -53,6 +58,12 @@ import {
   rowsToSpec,
   type SpecRow,
 } from './specRows';
+import {
+  attachableCertifications,
+  attachCertification,
+  detachCertificationAt,
+  isRetiredCertification,
+} from './certificationPicker';
 
 interface EditProductModalProps {
   open: boolean;
@@ -155,6 +166,72 @@ export default function EditProductModal({
   // make the next save drop the other five.
   const storedCategoryIds: string[] =
     productCategoriesData?.categories?.map((c) => c._id) ?? [];
+
+  /**
+   * The global catalogue of certifications an admin can attach.
+   *
+   * `dietaryAttributes` was the one field the migration wrote that this form could
+   * not edit: the state was seeded from the product and the payload builder sent it
+   * back untouched, so a product's certifications were visible only in
+   * `ProductDetailsModal`'s read-only list and there was no way to change them.
+   * `enabled: open` for the same reason `filtersData` has it - the modal is opened
+   * per product, and the catalogue is the same for all of them.
+   *
+   * The query key is the one the certifications admin screen already uses, so the
+   * two share one cache entry: deactivating a row there invalidates the picker
+   * here without either screen knowing about the other.
+   */
+  const { data: certTypesData, isLoading: certTypesLoading } = useQuery({
+    queryKey: ['certificationTypes'],
+    queryFn: certificationTypeService.getAll,
+    enabled: open,
+  });
+
+  const certTypes: CertificationType[] = certTypesData?.data ?? [];
+
+  /**
+   * The add-picker's options: active catalogue rows this product does not have,
+   * in `displayOrder`. See `attachableCertifications` for why inactive rows are
+   * withheld here but still displayed below.
+   */
+  const attachableCerts = attachableCertifications(
+    certTypes,
+    formData.dietaryAttributes
+  );
+
+  /**
+   * The two halves of the picker, deliberately not symmetrical.
+   *
+   * `attachableCerts` IS sorted by `displayOrder`; the attached chips are NOT. 12
+   * of the 236 products carry their certifications in an order that is not
+   * `displayOrder` order, so sorting the attached list would reorder all 12 on the
+   * first save that did not touch this control - a silent rewrite, 200, no diff to
+   * show for it. The attached list therefore keeps the order the product was
+   * stored in. Array order carries no meaning in this subdocument list, so nothing
+   * downstream can tell the difference; what it can tell is a missing or extra
+   * entry, and this picker cannot produce either by reordering.
+   */
+  const addCertification = (cert: CertificationType) => {
+    setFormData((prev) => ({
+      ...prev,
+      dietaryAttributes: attachCertification(prev.dietaryAttributes, cert),
+    }));
+  };
+
+  /**
+   * Detach by INDEX, not by title.
+   *
+   * `EZ-PI-00239` stores `"ISO 45001:2018"` twice and the two chips are identical
+   * on screen, so a title-keyed delete - which is what the tag, application,
+   * function, country and image lists in this modal all do - would drop both rows
+   * from a click on one of them, with no way for the admin to tell or undo it.
+   */
+  const removeCertification = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      dietaryAttributes: detachCertificationAt(prev.dietaryAttributes, index),
+    }));
+  };
 
   // Unit options
   const unitOptions = [
@@ -1411,6 +1488,144 @@ const countryOptions = filtersData?.data?.countryOfOrigin || [];
                       </Box>
                     </Box>
                   </Box>
+                </CardContent>
+              </Card>
+            </Box>
+
+            {/* Certifications. The picker for `dietaryAttributes` - the last field
+                the migration wrote that this form held but could not change. See
+                `certificationPicker.ts` for the mapping and the two rules that keep
+                an untouched product byte-identical on save. */}
+            <Box sx={{ width: '100%' }}>
+              <Card
+                sx={{
+                  height: '100%',
+                  borderRadius: 2,
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                }}
+              >
+                <CardContent>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      mb: 2,
+                      fontWeight: 'bold',
+                      color: '#1F2A44',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      fontSize: '1.1rem',
+                    }}
+                  >
+                    <VerifiedIcon sx={{ fontSize: '1rem' }} />
+                    Certifications
+                  </Typography>
+
+                  <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Select Certification</InputLabel>
+                      <Select
+                        value=""
+                        onChange={(e) => {
+                          const picked = attachableCerts.find(
+                            (c) => c._id === e.target.value
+                          );
+                          // `attachableCerts.find`, not the raw value: the value came
+                          // out of this list, but a re-render between the click and
+                          // the handler (the query resolving, a chip being deleted)
+                          // can leave a stale id, and adding `undefined` here would
+                          // throw on `cert.name` and take the dialog down.
+                          if (picked) addCertification(picked);
+                        }}
+                        // Always empty: the certification lives in the chips below,
+                        // so leaving the picked name in the box would show it twice
+                        // and read as "not added yet".
+                        displayEmpty
+                        label="Select Certification"
+                        disabled={certTypesLoading || attachableCerts.length === 0}
+                        sx={{ borderRadius: 2 }}
+                      >
+                        {attachableCerts.map((cert) => (
+                          <MenuItem key={cert._id} value={cert._id}>
+                            {cert.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <Button
+                      variant="contained"
+                      onClick={() => {
+                        const picked = attachableCerts[0];
+                        if (picked) addCertification(picked);
+                      }}
+                      disabled={
+                        certTypesLoading || attachableCerts.length === 0
+                      }
+                      size="small"
+                      sx={{
+                        borderRadius: 2,
+                        backgroundColor: '#2e7d32',
+                        '&:hover': { backgroundColor: '#1b5e20' },
+                        minWidth: 'auto',
+                        px: 2,
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 1,
+                      minHeight: 40,
+                    }}
+                  >
+                    {formData.dietaryAttributes.length === 0 ? (
+                      <Typography
+                        variant="caption"
+                        color="textSecondary"
+                        sx={{ alignSelf: 'center' }}
+                      >
+                        No certifications attached
+                      </Typography>
+                    ) : (
+                      formData.dietaryAttributes.map((attr, index) => {
+                        /*
+                         * `logo` is an MUI ICON NAME ("FileCheck", "USFDAIcon"),
+                         * not an image URL, so it is shown as the small text it is.
+                         * `ProductDetailsModal` was handing it to `<Image src>`,
+                         * which asked the browser to fetch the literal string
+                         * "FileCheck" as a relative path - a broken image on every
+                         * certification of every product.
+                         */
+                        const retired = isRetiredCertification(
+                          certTypes,
+                          attr.title
+                        );
+                        return (
+                          <Chip
+                            key={`${attr.title}-${index}`}
+                            label={retired ? `${attr.title} (retired)` : attr.title}
+                            onDelete={() => removeCertification(index)}
+                            size="small"
+                            color={retired ? 'default' : 'primary'}
+                            variant="outlined"
+                            sx={{ borderRadius: 2 }}
+                          />
+                        );
+                      })
+                    )}
+                  </Box>
+
+                  <FormHelperText>
+                    {formData.dietaryAttributes.some((a) =>
+                      isRetiredCertification(certTypes, a.title)
+                    )
+                      ? 'Retired: still attached to this product, but no longer offered by the active catalogue. It will be saved as-is unless you delete it.'
+                      : 'Attached certifications are stored as-is. The icon name and the PDF link come from the catalogue and are not editable here.'}
+                  </FormHelperText>
                 </CardContent>
               </Card>
             </Box>
