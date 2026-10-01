@@ -36,6 +36,11 @@ import {
   certificationTypeService,
   type CertificationType,
 } from '@/api/services';
+import {
+  buildCertPayload,
+  buildCertTogglePayload,
+  type CertFormState,
+} from './certForm';
 
 /**
  * The certification-KIND screen (FSSAI, ISO 22000, KOSHER, HALAL - 10 rows in the
@@ -45,16 +50,6 @@ import {
  * certificateId/issuedBy/expiryDate. This is the global list that products point
  * at, so the only rich field is a PDF per row.
  */
-
-interface CertFormState {
-  name: string;
-  description: string;
-  iconName: string;
-  displayOrder: number;
-  isActive: boolean;
-  /** Held from the edit when editing; set by the upload. */
-  fileUrl: string;
-}
 
 const EMPTY_FORM: CertFormState = {
   name: '',
@@ -114,18 +109,13 @@ export default function CertificationsListing() {
   });
 
   const saveMutation = useMutation({
+    // Built by a tested pure function. Every field goes out on every save, including
+    // empty ones: findByIdAndUpdate strips `undefined`, so an omitted or undefined
+    // key leaves the stored value in place and the admin gets a success toast for a
+    // change that did not happen. That made the icon field unclearable and the "PDF
+    // uploaded" chip's own delete button a complete no-op.
     mutationFn: async () => {
-      // `displayOrder` and `isActive` are sent even when falsy. `0` is a real
-      // display order and `isActive: false` is how a row is deactivated; dropping
-      // either would make those impossible to save.
-      const payload = {
-        name: form.name.trim(),
-        description: form.description.trim(),
-        iconName: form.iconName.trim() || undefined,
-        displayOrder: Number(form.displayOrder) || 0,
-        isActive: form.isActive,
-        ...(form.fileUrl ? { fileUrl: form.fileUrl } : {}),
-      };
+      const payload = buildCertPayload(form);
       return editing
         ? certificationTypeService.update(editing._id, payload)
         : certificationTypeService.create(payload);
@@ -146,21 +136,28 @@ export default function CertificationsListing() {
   /**
    * Flip isActive without opening the dialog.
    *
-   * `PATCH`-shaped through `update` because the server has no toggle endpoint. The
-   * two value-carrying fields are both sent explicitly: `displayOrder` comes back
-   * from the row, and sending only `isActive` would be a partial write that works
-   * today but silently zeroes nothing only by luck of the controller's field picking.
+   * Goes through the general `PUT /:id`, since the server has no toggle endpoint.
+   * The row's own values are carried along by `buildCertTogglePayload` rather than
+   * sending `{ isActive }` alone: a partial write depends on the server reading an
+   * absent key as "leave alone", which is the exact assumption that made the
+   * clear-field controls on this page silently do nothing.
    */
   const toggleMutation = useMutation({
     mutationFn: (type: CertificationType) =>
-      certificationTypeService.update(type._id, {
-        name: type.name,
-        description: type.description,
-        iconName: type.iconName,
-        displayOrder: type.displayOrder,
-        isActive: !type.isActive,
-      }),
+      certificationTypeService.update(
+        type._id,
+        buildCertTogglePayload({
+          _id: type._id,
+          name: type.name,
+          description: type.description ?? '',
+          iconName: type.iconName ?? '',
+          displayOrder: type.displayOrder,
+          isActive: type.isActive,
+          fileUrl: type.fileUrl ?? '',
+        })
+      ),
     onSuccess: () => {
+      toast.success('Certification type updated');
       queryClient.invalidateQueries({ queryKey: ['certificationTypes'] });
     },
     onError: (err: any) => {
@@ -387,6 +384,10 @@ export default function CertificationsListing() {
                   <Chip
                     label="PDF uploaded"
                     color="success"
+                    // This actually clears it now. It used to set fileUrl: '' while
+                    // the payload omitted the key entirely, so findByIdAndUpdate kept
+                    // the stored URL and reopening the dialog showed the PDF still
+                    // attached - a control that did nothing at all.
                     onDelete={() => setForm({ ...form, fileUrl: '' })}
                   />
                 )}

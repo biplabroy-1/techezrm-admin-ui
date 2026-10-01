@@ -36,6 +36,12 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { faqService, productService, type FAQ } from '@/api/services';
+import {
+  buildFaqPayload,
+  swapOrderUpdates,
+  nextFaqOrder,
+  type FAQFormState,
+} from './faqForm';
 
 /**
  * The FAQ management screen.
@@ -74,15 +80,6 @@ const KEY_LABELS: Record<FAQ['key'], string> = {
 function truncate(text: string, max = 80): string {
   if (!text) return '';
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
-
-interface FAQFormState {
-  question: string;
-  answer: string;
-  key: FAQ['key'];
-  entityId: string;
-  order: number;
-  isActive: boolean;
 }
 
 const EMPTY_FORM: FAQFormState = {
@@ -134,6 +131,28 @@ export default function FAQsListing() {
   });
 
   /**
+   * The collection's highest `order`, so a new FAQ lands at the end.
+   *
+   * A single-row query sorted descending, rather than a max over the visible 25-row
+   * page. Both `sortBy` and `sortOrder` are passed explicitly: they depend on
+   * server-side defaults in `faq.controller.ts`, and an edited default would
+   * otherwise silently move where new FAQs land.
+   */
+  const maxOrderQuery = useQuery({
+    queryKey: ['faqs', { maxOrder: true }],
+    // `sortOrder: 'desc'` is what makes this the MAX and not the min. Without it the
+    // server's default ascending order returns the lowest-ordered row, and a new FAQ
+    // would be created at `0 + 1` - colliding with the imported rows that sit at 0.
+    queryFn: () =>
+      faqService.getAll({
+        page: 1,
+        limit: 1,
+        sortBy: 'order',
+        sortOrder: 'desc',
+      }),
+  });
+
+  /**
    * Product names for the `entityId` column.
    *
    * A page of 25 FAQs is at most 25 products, but the listing is paged and a global
@@ -159,19 +178,11 @@ export default function FAQsListing() {
   const totalResults = faqsData?.pagination?.total ?? 0;
 
   const saveMutation = useMutation({
+    // The payload is built by a tested pure function: every field is sent on every
+    // save, INCLUDING empty ones, because findByIdAndUpdate strips `undefined` and a
+    // blank field would otherwise keep its stored value while reporting success.
     mutationFn: async () => {
-      const payload = {
-        question: form.question.trim(),
-        answer: form.answer.trim(),
-        key: form.key,
-        // Trimmed, and `undefined` rather than `''` when blank: `entityId` is
-        // optional, and an empty string is a real (wrong) value that would make the
-        // row look attached to something.
-        entityId: form.entityId.trim() || undefined,
-        entityType: form.entityId.trim() ? 'product' : undefined,
-        order: Number(form.order) || 0,
-        isActive: form.isActive,
-      };
+      const payload = buildFaqPayload(form);
       return editing
         ? faqService.update(editing._id, payload)
         : faqService.create(payload);
@@ -187,41 +198,60 @@ export default function FAQsListing() {
     },
   });
 
+  /**
+   * Soft delete, not hard.
+   *
+   * The server has always exposed `PATCH /:id/soft-delete` alongside the hard
+   * `DELETE /:id` (faq.routes.ts), and this screen was calling the hard one. On a
+   * collection of 717 migrated FAQs an accidental hard delete is unrecoverable -
+   * there is no trash, and the migration script refuses to run against a non-empty
+   * target, so a re-import is not a safety net.
+   *
+   * `isActive` is already what soft delete flips, so a soft-deleted row stops being
+   * served by the storefront while remaining here to be reactivated by an admin.
+   */
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => faqService.remove(id),
+    mutationFn: (id: string) => faqService.softDelete(id),
     onSuccess: () => {
-      toast.success('FAQ deleted successfully!');
+      toast.success('FAQ removed');
       queryClient.invalidateQueries({ queryKey: ['faqs'] });
       setDeleteTarget(null);
     },
     onError: (err: any) => {
-      toast.error(err?.message || 'Failed to delete FAQ');
+      toast.error(err?.message || 'Failed to remove FAQ');
     },
   });
 
   /**
-   * Swap two adjacent rows' orders.
+   * Move one row up or down.
    *
-   * Both rows are sent because a one-sided update would give two FAQs the same
-   * order, and the server's sort is `{ order: 1 }` - ties then resolve by whatever
-   * Mongo decides, so the button would appear to do nothing on some saves and
-   * reorder on others.
+   * The swap itself is the tested pure function `swapOrderUpdates`, because it has to
+   * handle the case this table will mostly be in: two neighbours sharing an order.
+   * `order` defaults to 0, the 717 imported rows were not given distinct values, and
+   * the default view is unfiltered across all seven keys - so equal-order neighbours
+   * are the norm. Emitting the naive swap there sends two identical writes and the
+   * result is whatever Mongo decides for a tie: the button appears to do nothing.
    *
    * The neighbour is taken from the CURRENT page only. Moving the last row on a page
-   * up therefore swaps it with the last row on the previous page, whose order this
-   * client never loaded; the up button is disabled on the first row of the first
-   * page for the same reason at the other end.
+   * up would swap it with the last row of the previous page, whose order this client
+   * never loaded, so the up button is disabled on the first row of the first page and
+   * the down button on the last row of the last.
    */
   const reorderMutation = useMutation({
     mutationFn: async ({ index, direction }: { index: number; direction: -1 | 1 }) => {
-      const other = faqs[index + direction];
-      if (!other) return;
-      return faqService.bulkUpdateOrders([
-        { id: faqs[index]._id, order: other.order },
-        { id: other._id, order: faqs[index].order },
-      ]);
+      const updates = swapOrderUpdates(faqs, index, direction);
+      // Nothing to do - the neighbour is off this page. Skip the request rather
+      // than send a no-op and report it as a success.
+      if (!updates.length) return;
+      return faqService.bulkUpdateOrders(updates);
     },
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
+      // Was silent. A reorder has no other visible effect until the list refetches,
+      // so without this the admin clicks the button and gets no confirmation that
+      // anything happened - indistinguishable from the bug above.
+      toast.success(
+        variables.direction === -1 ? 'FAQ moved up' : 'FAQ moved down'
+      );
       queryClient.invalidateQueries({ queryKey: ['faqs'] });
     },
     onError: (err: any) => {
@@ -233,9 +263,23 @@ export default function FAQsListing() {
     setEditing(null);
     setForm({
       ...EMPTY_FORM,
-      // Default to the end of the current list rather than 0, which would put a new
-      // FAQ at the top of the storefront FAQ section.
-      order: faqs.length > 0 ? Math.max(...faqs.map((f) => f.order)) + 1 : 0,
+      // From the COLLECTION's highest order, not from the visible page.
+      //
+      // `faqs` is 25 rows. Reading the max off it meant every newly imported FAQ was
+      // created at the same order as the largest row on page 1 - colliding with it,
+      // and with each other. With 717 migrated rows whose `order` values are
+      // whatever the import produced, that is not a corner case.
+      //
+      // `maxOrderQuery` asks the server for exactly the highest-ordered row
+      // (limit 1, descending), so the answer is global regardless of filters or
+      // pagination. Falls back to the visible rows if that query has not landed,
+      // which is still better than 0 and never worse than the old behaviour.
+      order: nextFaqOrder(
+        maxOrderQuery.data?.data?.[0]?.order ??
+          (faqs.length > 0
+            ? Math.max(...faqs.map((f) => f.order))
+            : undefined)
+      ),
     });
     setFormOpen(true);
   }
@@ -403,7 +447,10 @@ export default function FAQsListing() {
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Delete">
+                          {/* Tooltip says "Remove" to match the soft delete: a tooltip promising "Delete"
+                          while the action only deactivates is the kind of small lie
+                          that makes an admin distrust the rest of the row. */}
+                          <Tooltip title="Remove from storefront">
                             <IconButton
                               size="small"
                               onClick={() => setDeleteTarget(faq)}
@@ -498,11 +545,14 @@ export default function FAQsListing() {
         </DialogActions>
       </Dialog>
 
+      {/* Says "removed", not "deleted": this is a soft delete, so the wording has to match
+          what actually happened or an admin will not know the FAQ is recoverable. */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
-        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogTitle>Confirm Remove</DialogTitle>
         <DialogContent>
           <Typography>
-            Delete “{deleteTarget?.question}”? This cannot be undone.
+            Remove “{deleteTarget?.question}” from the storefront? It stays in the
+            database and can be reactivated by editing it later.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -515,7 +565,7 @@ export default function FAQsListing() {
             variant="contained"
             disabled={deleteMutation.isPending}
           >
-            {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            {deleteMutation.isPending ? 'Removing...' : 'Remove'}
           </Button>
         </DialogActions>
       </Dialog>

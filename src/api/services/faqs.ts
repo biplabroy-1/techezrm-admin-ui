@@ -39,6 +39,14 @@ export interface GetFAQsParams {
   search?: string;
   key?: FAQ['key'];
   entityId?: string;
+  /**
+   * Defaults to `order` ascending server-side. Passed explicitly whenever the point
+   * of the call is to reach one end of the collection - e.g. `limit: 1` with
+   * `sortOrder: 'desc'` is how the FAQ screen finds the highest `order` in the whole
+   * collection rather than the highest on the current page.
+   */
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface CreateFAQRequest {
@@ -94,6 +102,8 @@ class FAQService {
       if (params?.search) queryParams.append('search', params.search);
       if (params?.key) queryParams.append('key', params.key);
       if (params?.entityId) queryParams.append('entityId', params.entityId);
+      if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+      if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
 
       const qs = queryParams.toString();
       const response = await api.get(qs ? `${this.baseUrl}?${qs}` : this.baseUrl);
@@ -159,6 +169,10 @@ class FAQService {
     }
   }
 
+  /**
+   * Hard delete. Irreversible, and NOT what the admin screen should call - see
+   * `softDelete`. Kept because the endpoint exists and something may need it.
+   */
   async remove(id: string): Promise<FAQResponse> {
     try {
       const response = await api.delete(`${this.baseUrl}/${id}`);
@@ -168,6 +182,29 @@ class FAQService {
         error?.message ||
           error?.response?.data?.message ||
           'Failed to delete FAQ'
+      );
+    }
+  }
+
+  /**
+   * Soft delete: sets `isActive: false` and leaves the row.
+   *
+   * `PATCH /:id/soft-delete` (faq.routes.ts). Preferred over the hard delete for
+   * admin use: on a 717-row migrated collection an accidental hard delete cannot be
+   * undone, and the migration script refuses to run against a non-empty target, so
+   * there is no re-import safety net. The storefront filters on `isActive`, so a
+   * soft-deleted FAQ disappears from the site while an admin can still bring it back
+   * by editing it.
+   */
+  async softDelete(id: string): Promise<FAQResponse> {
+    try {
+      const response = await api.patch(`${this.baseUrl}/${id}/soft-delete`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(
+        error?.message ||
+          error?.response?.data?.message ||
+          'Failed to remove FAQ'
       );
     }
   }

@@ -127,6 +127,81 @@ test('the FAQ service posts the { orderUpdates } shape the server reads', () => 
   expect(faqs).toMatch(/bulk\/orders`[\s\S]{0,80}?orderUpdates/);
 });
 
+/* ---- I5: the FAQ screen must soft delete, not hard delete ---- */
+
+test('the FAQ screen removes FAQs through the soft-delete endpoint', () => {
+  const faqs = read('faqs.ts');
+  const page = readApp('faqs/page.tsx');
+
+  // faq.routes.ts exposes both `DELETE /:id` and `PATCH /:id/soft-delete`. On 717
+  // migrated rows a hard delete is unrecoverable, and the migration script refuses a
+  // non-empty target, so a re-import is not a safety net.
+  expect(faqs).toContain('/soft-delete');
+  // The page must call the soft delete, not the hard one.
+  expect(page).toContain('faqService.softDelete');
+  expect(page).not.toContain('faqService.remove');
+  // ...and must not reach for a raw axios delete either.
+  expect(page).not.toMatch(/api\.delete/);
+});
+
+test('the soft delete is a PATCH, matching the route the server registers', () => {
+  const faqs = read('faqs.ts');
+  // faq.routes.ts declares `router.patch("/:id/soft-delete", ...)`. A DELETE or POST
+  // here would 404 on a method the router does not register.
+  expect(faqs).toMatch(/api\.patch\(`\$\{this\.baseUrl\}\/\$\{id\}\/soft-delete`/);
+});
+
+test('the FAQ screen confirms a reorder to the admin', () => {
+  const page = readApp('faqs/page.tsx');
+
+  // A reorder has no visible effect until the list refetches, so without a success
+  // toast the admin clicks the button and cannot tell it worked - which is
+  // indistinguishable from the tie bug the swap guard exists to prevent.
+  expect(page).toMatch(/reorderMutation[\s\S]{0,900}?onSuccess[\s\S]{0,300}?toast\.success/);
+});
+
+test('the FAQ screen takes a new FAQ order from the collection, not the page', () => {
+  const page = readApp('faqs/page.tsx');
+
+  // Reading the max off the visible 25-row page meant every imported FAQ was created
+  // at the same order as the largest row on screen. A single-row descending query is
+  // the only thing that is correct regardless of pagination.
+  expect(page).toContain("sortOrder: 'desc'");
+  expect(page).toContain('maxOrderQuery');
+
+  // The ORDER VALUE must read from that query, not merely coexist with it. Asserting
+  // only that the identifier appears passes even when the call site has been
+  // reverted to the page-derived max - which is the bug - because the declaration is
+  // still there. This ties the two together.
+  expect(page).toMatch(
+    /order:\s*nextFaqOrder\(\s*maxOrderQuery\.data\?\.data\?\.\[0\]\?\.order/
+  );
+  // ...and the QUERY that feeds it must actually ask for the maximum.
+  //
+  // Anchored on the declaration and closed at the `})` that ends it, so this covers
+  // ONLY the max-order query. Every attempt to bound it by a character count or by a
+  // lazy quantifier instead matched somewhere else in the file and passed against the
+  // exact regression it was written to catch - the main listing query legitimately
+  // mentions `limit: 1`-adjacent params and sorts ascending, and a loose window finds
+  // it. The assertion has to cover the whole queryFn body or it proves nothing.
+  const declStart = page.indexOf('const maxOrderQuery');
+  expect(declStart).toBeGreaterThan(-1);
+  const declEnd = page.indexOf('});', page.indexOf('queryFn:', declStart));
+
+  // Strip comments before asserting. The declaration carries a JSDoc block that
+  // QUOTES the very params under test - so a naive `toContain("sortOrder: 'desc'")`
+  // passes on the comment alone while the actual query has lost the parameter. That
+  // is exactly what the earlier, looser version of this assertion did.
+  const maxQueryDecl = page
+    .slice(declStart, declEnd)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+
+  expect(maxQueryDecl).toMatch(/limit:\s*1/);
+  expect(maxQueryDecl).toMatch(/sortBy:\s*'order'/);
+  expect(maxQueryDecl).toMatch(/sortOrder:\s*'desc'/);
+});
+
 test('the FAQ key filter offers exactly the enum the schema allows', () => {
   const faqs = read('faqs.ts');
   // A key outside the server's enum fails schema validation on save, and a filter
@@ -153,14 +228,17 @@ test('the FAQ key filter offers exactly the enum the schema allows', () => {
 const readApp = (p: string) =>
   readFileSync(join(SRC, '..', '..', 'app', 'admin', 'data-management', p), 'utf8');
 
-test('the FAQ screen writes orders through the bulk endpoint, swapping neighbours', () => {
+test('the FAQ screen delegates the swap to the tested pure function', () => {
   const page = readApp('faqs/page.tsx');
 
-  expect(page).toContain('faqService.bulkUpdateOrders');
-  // Two rows in one call: a one-sided update leaves two FAQs sharing an `order`,
-  // and the server sorts by `{ order: 1 }` so the tie resolves arbitrarily - the
-  // button would appear to do nothing on some saves.
-  expect(page).toMatch(/bulkUpdateOrders\(\s*\[\s*\{ id:[\s\S]{0,200}?\{ id:/);
+  // The swap logic - including the tie guard, which is the part that was wrong -
+  // lives in faqForm.ts and is unit tested there. What matters here is that the page
+  // CALLS it rather than inlining an array literal, so the two cannot drift: the
+  // page used to build `{ id, order }` pairs inline, which is exactly what the naive
+  // no-op-on-tie version was.
+  expect(page).toContain('swapOrderUpdates');
+  expect(page).toContain('faqService.bulkUpdateOrders(updates)');
+  expect(page).not.toMatch(/bulkUpdateOrders\(\s*\[\s*\{ id:/);
 });
 
 test('the certification screen uploads through the endpoint that exists', () => {
