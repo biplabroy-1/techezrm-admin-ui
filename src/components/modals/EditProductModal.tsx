@@ -59,10 +59,10 @@ import {
   type SpecRow,
 } from './specRows';
 import {
-  attachableCertifications,
   attachCertification,
   detachCertificationAt,
-  isRetiredCertification,
+  pickerState,
+  type CatalogueStatus,
 } from './certificationPicker';
 
 interface EditProductModalProps {
@@ -181,23 +181,61 @@ export default function EditProductModal({
    * two share one cache entry: deactivating a row there invalidates the picker
    * here without either screen knowing about the other.
    */
-  const { data: certTypesData, isLoading: certTypesLoading } = useQuery({
+  const {
+    data: certTypesData,
+    isLoading: certTypesLoading,
+    isError: certTypesError,
+  } = useQuery({
     queryKey: ['certificationTypes'],
     queryFn: certificationTypeService.getAll,
     enabled: open,
   });
 
+  /**
+   * WHICH WORLD WE ARE IN, stated explicitly and passed down.
+   *
+   * The first version of this picker read only `isLoading` and collapsed the other
+   * two cases into "no types", which made a failed request indistinguishable from
+   * an empty catalogue - and `certTypes` is `[]` on a failure, so every attached
+   * certification rendered as `(retired)`, asserting of a NETWORK problem that
+   * these certifications were "no longer offered by the active catalogue". The
+   * admin's obvious response to that is to detach them, which is the one action
+   * this control exists to enable. `isError` is destructured for that reason alone.
+   *
+   * Retried, not failed-forever: react-query re-runs the query on the next open and
+   * on its own retry schedule, so an error here is a passing state, not a verdict.
+   */
+  const certCatalogueStatus: CatalogueStatus = certTypesError
+    ? 'error'
+    : certTypesLoading || !certTypesData
+      ? 'loading'
+      : 'ready';
+
   const certTypes: CertificationType[] = certTypesData?.data ?? [];
 
   /**
-   * The add-picker's options: active catalogue rows this product does not have,
-   * in `displayOrder`. See `attachableCertifications` for why inactive rows are
-   * withheld here but still displayed below.
+   * Everything the picker renders, for the world we are in. `attachableCerts` is
+   * sorted by `displayOrder`; the attached chips below are deliberately NOT - see
+   * the note on `addCertification`.
    */
-  const attachableCerts = attachableCertifications(
-    certTypes,
-    formData.dietaryAttributes
-  );
+  const { attachable: attachableCerts, canAttach, standings, retiredCount } =
+    pickerState({
+      status: certCatalogueStatus,
+      types: certTypes,
+      attached: formData.dietaryAttributes,
+    });
+
+  /**
+   * The pending pick, held here rather than derived.
+   *
+   * The Select only CHOOSES; this handler commits. That is the pattern the
+   * Applications, Functions and Country controls in this modal already use, and it
+   * is the reason the old Add button could be deleted: it fired on
+   * `attachableCerts[0]`, so an admin who picked "KOSHER" in the dropdown and
+   * clicked Add got HALAL - two controls, one of them acting on a target the admin
+   * never chose.
+   */
+  const [pendingCertId, setPendingCertId] = useState('');
 
   /**
    * The two halves of the picker, deliberately not symmetrical.
@@ -212,10 +250,20 @@ export default function EditProductModal({
    * entry, and this picker cannot produce either by reordering.
    */
   const addCertification = (cert: CertificationType) => {
+    setPendingCertId('');
     setFormData((prev) => ({
       ...prev,
       dietaryAttributes: attachCertification(prev.dietaryAttributes, cert),
     }));
+  };
+
+  const commitPendingCertification = () => {
+    if (!canAttach) return;
+    // Looked up in `attachableCerts` rather than trusted from state: the id was
+    // valid when it was chosen, but the catalogue can change between the pick and
+    // the click, and `addCertification(undefined)` would throw on `cert.name`.
+    const picked = attachableCerts.find((c) => c._id === pendingCertId);
+    if (picked) addCertification(picked);
   };
 
   /**
@@ -567,6 +615,11 @@ const countryOptions = filtersData?.data?.countryOfOrigin || [];
     setCountryInput('');
     setBannerImageInput('');
     setImageInput('');
+    // The pending certification pick is cleared with the other input buffers. The
+    // modal is reused across products, so a pick left behind would be sitting in
+    // the dropdown when the next product opens - offering to add a certification
+    // the admin selected for a different product.
+    setPendingCertId('');
     onClose();
   };
 
@@ -1521,28 +1574,25 @@ const countryOptions = filtersData?.data?.countryOfOrigin || [];
                     Certifications
                   </Typography>
 
+                  {/*
+                   * One control, not two.
+                   *
+                   * The Select only CHOOSES and the button commits, which is the
+                   * pattern the Applications, Functions and Country controls in this
+                   * modal already use. The previous version had the Select commit
+                   * on change AND an Add button that committed `attachableCerts[0]`
+                   * - so picking "KOSHER" in the dropdown and clicking Add attached
+                   * HALAL, and neither control could be reasoned about from the
+                   * other.
+                   */}
                   <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Select Certification</InputLabel>
                       <Select
-                        value=""
-                        onChange={(e) => {
-                          const picked = attachableCerts.find(
-                            (c) => c._id === e.target.value
-                          );
-                          // `attachableCerts.find`, not the raw value: the value came
-                          // out of this list, but a re-render between the click and
-                          // the handler (the query resolving, a chip being deleted)
-                          // can leave a stale id, and adding `undefined` here would
-                          // throw on `cert.name` and take the dialog down.
-                          if (picked) addCertification(picked);
-                        }}
-                        // Always empty: the certification lives in the chips below,
-                        // so leaving the picked name in the box would show it twice
-                        // and read as "not added yet".
-                        displayEmpty
+                        value={pendingCertId}
+                        onChange={(e) => setPendingCertId(e.target.value as string)}
                         label="Select Certification"
-                        disabled={certTypesLoading || attachableCerts.length === 0}
+                        disabled={!canAttach}
                         sx={{ borderRadius: 2 }}
                       >
                         {attachableCerts.map((cert) => (
@@ -1554,13 +1604,8 @@ const countryOptions = filtersData?.data?.countryOfOrigin || [];
                     </FormControl>
                     <Button
                       variant="contained"
-                      onClick={() => {
-                        const picked = attachableCerts[0];
-                        if (picked) addCertification(picked);
-                      }}
-                      disabled={
-                        certTypesLoading || attachableCerts.length === 0
-                      }
+                      onClick={commitPendingCertification}
+                      disabled={!canAttach || !pendingCertId}
                       size="small"
                       sx={{
                         borderRadius: 2,
@@ -1600,17 +1645,28 @@ const countryOptions = filtersData?.data?.countryOfOrigin || [];
                          * "FileCheck" as a relative path - a broken image on every
                          * certification of every product.
                          */
-                        const retired = isRetiredCertification(
-                          certTypes,
-                          attr.title
-                        );
+                        const standing = standings[index];
                         return (
                           <Chip
                             key={`${attr.title}-${index}`}
-                            label={retired ? `${attr.title} (retired)` : attr.title}
+                            /*
+                             * "(retired)" appears ONLY for a standing of 'retired',
+                             * which `certificationStanding` returns only for a
+                             * LOADED catalogue. On a failed fetch every standing is
+                             * 'unknown' and this renders the plain title - a failed
+                             * request must never tell an admin their live
+                             * certifications were retired.
+                             */
+                            label={
+                              standing === 'retired'
+                                ? `${attr.title} (retired)`
+                                : attr.title
+                            }
                             onDelete={() => removeCertification(index)}
                             size="small"
-                            color={retired ? 'default' : 'primary'}
+                            color={
+                              standing === 'retired' ? 'default' : 'primary'
+                            }
                             variant="outlined"
                             sx={{ borderRadius: 2 }}
                           />
@@ -1619,13 +1675,39 @@ const countryOptions = filtersData?.data?.countryOfOrigin || [];
                     )}
                   </Box>
 
+                  {/*
+                   * Three states, three different things to say. The mistake this
+                   * replaces treated "the catalogue failed" as "every
+                   * certification is retired" and told the admin so, with the add
+                   * control disabled and no reason on screen.
+                   */}
+                  {certCatalogueStatus === 'error' && (
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                      Could not load the certification catalogue, so no
+                      certification can be added right now. Everything already
+                      attached is unchanged and will be saved exactly as it is - the
+                      statuses of those certifications are simply unknown here, not
+                      withdrawn. Close and reopen this dialog to try again.
+                    </Alert>
+                  )}
+
                   <FormHelperText>
-                    {formData.dietaryAttributes.some((a) =>
-                      isRetiredCertification(certTypes, a.title)
-                    )
-                      ? 'Retired: still attached to this product, but no longer offered by the active catalogue. It will be saved as-is unless you delete it.'
-                      : 'Attached certifications are stored as-is. The icon name and the PDF link come from the catalogue and are not editable here.'}
+                    {certCatalogueStatus === 'loading'
+                      ? 'Loading the certification catalogue...'
+                      : certCatalogueStatus === 'error'
+                        ? 'The add control is disabled while the catalogue is unavailable.'
+                        : retiredCount > 0
+                          ? `Retired: ${retiredCount} of these are no longer offered by the active catalogue. They stay attached and save as-is until you delete them.`
+                          : 'Attached certifications are stored as-is. The icon name and the PDF link come from the catalogue and are not editable here.'}
                   </FormHelperText>
+
+                  {certCatalogueStatus === 'ready' && !canAttach && (
+                    <FormHelperText>
+                      {formData.dietaryAttributes.length === 0
+                        ? 'No certifications are available to attach.'
+                        : 'Every available certification is already attached.'}
+                    </FormHelperText>
+                  )}
                 </CardContent>
               </Card>
             </Box>

@@ -3,7 +3,8 @@ import {
   toDietaryAttribute,
   sortByDisplayOrder,
   findCertificationType,
-  isRetiredCertification,
+  certificationStanding,
+  pickerState,
   attachableCertifications,
   attachCertification,
   detachCertificationAt,
@@ -302,6 +303,127 @@ test('a relative fileUrl and a non-FileCheck icon both survive the mapping', () 
   });
 });
 
+/*
+ * THE `??` VS `||` QUESTION - and what is actually true about it
+ * -------------------------------------------------------------
+ * A review asked for a `null` fixture "so the test can actually fail on `||`".
+ * That fixture cannot exist, and the reason is worth writing down rather than
+ * quietly satisfying.
+ *
+ * For a `string | null | undefined` field, `?? ''` and `|| ''` are IDENTICAL. The
+ * only falsy value a `string` can hold is `''`, and both operators map `''` to
+ * `''`; `null` and `undefined` are both falsy AND both nullish, so both operators
+ * map them to `''`. Verified exhaustively in Bun 1.4.2 and Node 24 over
+ * `{undefined, null, '', 'FileCheck', 'USFDAIcon'}` - zero differences. The two
+ * operators diverge only on falsy values that are NOT nullish, i.e. `0`, `false`
+ * and `NaN`, none of which can reach a field the schema declares as a `String`.
+ *
+ * So the honest split is:
+ *
+ * - These `null` tests pin BEHAVIOUR - a JSON document can hold `null` where the
+ *   TypeScript declaration cannot express it, and it must normalise to `''` - not
+ *   the choice of operator. A `||` implementation passes all of them. They are
+ *   kept because the behaviour is real coverage, and their comments now say so
+ *   rather than implying they discriminate.
+ * - `the operator never fabricates a replacement for a value that is present`
+ *   below is the one test that actually discriminates.
+ */
+
+/** `null` where the declaration allows only `undefined`. The cast is the point. */
+const NULL_ICON_TYPE = {
+  ...CERT_TYPES[5],
+  iconName: null as unknown as string,
+} as CertificationType;
+const NULL_FILE_TYPE = {
+  ...CERT_TYPES[5],
+  fileUrl: null as unknown as string,
+} as CertificationType;
+
+test('a null iconName normalises to ""', () => {
+  // Does NOT discriminate `??` from `||` - see the block comment. Pins that a
+  // nullish value cannot survive into the payload, which is worth knowing and is
+  // not the same as pinning the operator.
+  expect(toDietaryAttribute(NULL_ICON_TYPE)).toEqual({
+    title: 'FSSAI',
+    logo: '',
+    certificateLink: CERT_TYPES[5].fileUrl,
+  });
+});
+
+test('a null fileUrl normalises to ""', () => {
+  expect(toDietaryAttribute(NULL_FILE_TYPE)).toEqual({
+    title: 'FSSAI',
+    logo: 'FileCheck',
+    certificateLink: '',
+  });
+});
+
+test('a null field is serialised as an empty string on the wire', () => {
+  // The end-to-end consequence, and the reason the behaviour is worth a fixture
+  // at all: the payload is the only thing standing between a null and 236
+  // products. Also operator-agnostic.
+  const sent = payloadOf([toDietaryAttribute(NULL_ICON_TYPE)]);
+  expect(sent).toContain('"logo":""');
+  expect(sent).not.toContain('null');
+  expect(JSON.parse(sent)[0].logo).toBe('');
+});
+
+test('both fields null still yields an entry with all three keys', () => {
+  const bothNull = {
+    ...CERT_TYPES[5],
+    iconName: null as unknown as string,
+    fileUrl: null as unknown as string,
+  } as CertificationType;
+  const derived = toDietaryAttribute(bothNull);
+  expect(Object.keys(derived).sort()).toEqual([
+    'certificateLink',
+    'logo',
+    'title',
+  ]);
+  expect(payloadOf([derived])).toBe(
+    '[{"title":"FSSAI","logo":"","certificateLink":""}]'
+  );
+});
+
+test('the operator never fabricates a replacement for a value that is present', () => {
+  // THE test that discriminates, and the actual reason `??` is specified here.
+  //
+  // `??` substitutes only for nullish. `||` substitutes for anything falsy, so it
+  // REWRITES a value that was present. On a well-typed `string` field the two are
+  // indistinguishable - the only falsy string is `''` - but a JSON document can
+  // carry a number or a boolean where the declaration says string, and there `||`
+  // would silently discard a stored value and replace it with `''`. `??` passes it
+  // through, so the bad data is preserved and visible rather than laundered into
+  // something plausible.
+  //
+  // `0` cannot legitimately reach this field; that is the point. The contract
+  // being pinned is "do not fabricate", and a mapper that only ever substitutes
+  // for absence is the one that can be trusted to be shown what it was given.
+  const zeroIcon = { ...CERT_TYPES[5], iconName: 0 as unknown as string };
+  expect(toDietaryAttribute(zeroIcon).logo).toBe(0 as unknown as string);
+
+  const falseFile = { ...CERT_TYPES[5], fileUrl: false as unknown as string };
+  expect(toDietaryAttribute(falseFile).certificateLink).toBe(
+    false as unknown as string
+  );
+});
+
+test('an absent field is replaced, and the key survives', () => {
+  // The half of the fallback contract that `||` also satisfies, and the one that
+  // actually bites: `undefined` must become `''` and not stay `undefined`, because
+  // `JSON.stringify` DROPS an undefined property, which would send an entry with
+  // two keys where every other entry has three.
+  const derived = toDietaryAttribute({
+    ...CERT_TYPES[5],
+    iconName: undefined,
+    fileUrl: undefined,
+  });
+  expect(Object.keys(derived)).toHaveLength(3);
+  expect(payloadOf([derived])).toBe(
+    '[{"title":"FSSAI","logo":"","certificateLink":""}]'
+  );
+});
+
 /* ------------------------------------------------------------------ *
  * SORTING
  * ------------------------------------------------------------------ */
@@ -328,10 +450,24 @@ test('sortByDisplayOrder leaves the array it was given alone', () => {
 });
 
 test('equal displayOrder values keep their original relative order', () => {
-  // `EZ-PI-00239` stores "ISO 45001:2018" twice, and two catalogue rows are
-  // allowed to share a displayOrder (`buildCertPayload` takes whatever number it
-  // is given). An unstable comparator would make the payload of two identical
-  // no-op saves differ, which is the one thing this picker must never do.
+  // THIS TEST CANNOT FAIL, and it is kept anyway - read this comment before
+  // trusting it to catch anything.
+  //
+  // The previous version of this test claimed an unstable comparator "would make
+  // the payload of two identical no-op saves differ", citing `EZ-PI-00239`'s
+  // duplicated title. Both halves were wrong. `Array.prototype.sort` has been
+  // stable by specification since ES2019 (measured identical in Bun 1.4.2 and
+  // Node 24 on a 12-element array, 11 of them tied), and `sortByDisplayOrder` is
+  // only ever called on CATALOGUE rows inside `attachableCertifications` - the
+  // attached entries, duplicates included, never pass through it.
+  //
+  // So what this actually pins is the LANGUAGE guarantee, and it earns its place
+  // only as a tripwire on the IMPLEMENTATION: if someone rewrites the sort to
+  // decorate into a keyed record and sort the keys - which reorders on numeric-like
+  // keys, and `_id`s are hex strings, so `sort()` on them is lexicographic and
+  // stable in practice, but a `displayOrder` record would not be - this fails. The
+  // claim it used to make was stronger than the claim it can support, and the
+  // honest version is the one above.
   const a = { ...CERT_TYPES[3], _id: 'a', name: 'A' };
   const b = { ...CERT_TYPES[3], _id: 'b', name: 'B' };
   const c = { ...CERT_TYPES[3], _id: 'c', name: 'C' };
@@ -340,6 +476,24 @@ test('equal displayOrder values keep their original relative order', () => {
     'B',
     'C',
   ]);
+});
+
+test('sortByDisplayOrder really does leave a tie alone, on a large tied array', () => {
+  // The same tripwire, at a size where a sort that is only accidentally stable on
+  // small inputs would show up. 60 rows, 59 of them tied at the same
+  // `displayOrder`, one at 0.
+  const tied = Array.from({ length: 59 }, (_, i) => ({
+    ...CERT_TYPES[3],
+    _id: `t${i}`,
+    name: `T${i}`,
+    displayOrder: 5,
+  }));
+  const first = { ...CERT_TYPES[3], _id: 'first', name: 'FIRST', displayOrder: 0 };
+  const sorted = sortByDisplayOrder([...tied, first]);
+  expect(sorted[0].name).toBe('FIRST');
+  expect(sorted.slice(1).map((t) => t.name)).toEqual(
+    tied.map((t) => t.name)
+  );
 });
 
 /* ------------------------------------------------------------------ *
@@ -370,8 +524,8 @@ test('an inactive catalogue row counts as retired', () => {
   const types = CERT_TYPES.map((t) =>
     t.name === 'HALAL' ? { ...t, isActive: false } : t
   );
-  expect(isRetiredCertification(types, 'HALAL')).toBe(true);
-  expect(isRetiredCertification(types, 'FSSAI')).toBe(false);
+  expect(certificationStanding(types, 'HALAL', 'ready')).toBe('retired');
+  expect(certificationStanding(types, 'FSSAI', 'ready')).toBe('active');
 });
 
 test('a deleted catalogue row counts as retired', () => {
@@ -379,7 +533,148 @@ test('a deleted catalogue row counts as retired', () => {
   // the catalogue no longer offers. Treating "row deleted" as "not retired" would
   // show an unqualified chip that the admin cannot act on.
   const types = CERT_TYPES.filter((t) => t.name !== 'HALAL');
-  expect(isRetiredCertification(types, 'HALAL')).toBe(true);
+  expect(certificationStanding(types, 'HALAL', 'ready')).toBe('retired');
+});
+
+/* ------------------------------------------------------------------ *
+ * THE THREE CATALOGUE STATES
+ * ------------------------------------------------------------------ *
+ * The bug these pin: `isRetiredCertification(types, title)` answered `true`
+ * whenever no matching row was found, and `types` is `[]` on a failed request. So
+ * one 500 rendered every attached certification as a grey `(retired)` chip
+ * asserting "no longer offered by the active catalogue", with the add control
+ * disabled and no reason given. An admin's reasonable response to that is to
+ * detach them, which is the one action this control exists to enable.
+ *
+ * The fix is a tri-state: 'retired' is a CLAIM ABOUT THE CATALOGUE, so it is only
+ * reachable once the catalogue has arrived.
+ */
+
+test('a LOADED catalogue is the only state that may claim anything is retired', () => {
+  // The core of the fix, and the assertion the old boolean could not make.
+  const emptyCatalogue: CertificationType[] = [];
+  expect(
+    certificationStanding(emptyCatalogue, 'FSSAI', 'ready')
+  ).toBe('retired');
+  expect(
+    certificationStanding(emptyCatalogue, 'FSSAI', 'error')
+  ).not.toBe('retired');
+  expect(
+    certificationStanding(emptyCatalogue, 'FSSAI', 'loading')
+  ).not.toBe('retired');
+});
+
+test('a FAILED catalogue claims nothing, even for a title that is gone', () => {
+  // Same world, same empty array - the two must be told apart by the status, not
+  // inferred from the data. Without the status parameter there is nothing to tell
+  // them apart with, which is precisely the original defect.
+  const types = CERT_TYPES.filter((t) => t.name !== 'HALAL');
+  expect(certificationStanding(types, 'HALAL', 'ready')).toBe('retired');
+  expect(certificationStanding(types, 'HALAL', 'error')).toBe('unknown');
+  expect(certificationStanding(types, 'HALAL', 'loading')).toBe('unknown');
+});
+
+test('a LOADING catalogue claims nothing about a row that is still active', () => {
+  expect(certificationStanding(CERT_TYPES, 'FSSAI', 'loading')).toBe('unknown');
+});
+
+test('an errored catalogue never reports a retired count', () => {
+  // The number is what a notice line is built from, so if it could be non-zero in
+  // the error state the "no longer offered by the active catalogue" sentence would
+  // still reach the screen.
+  const state = pickerState({
+    status: 'error',
+    types: [],
+    attached: STORED_EZ00001,
+  });
+  expect(state.retiredCount).toBe(0);
+  expect(state.unknownCount).toBe(6);
+  expect(state.standings.every((s) => s === 'unknown')).toBe(true);
+});
+
+test('a loading catalogue never reports a retired count either', () => {
+  const state = pickerState({
+    status: 'loading',
+    types: [],
+    attached: STORED_EZ00001,
+  });
+  expect(state.retiredCount).toBe(0);
+  expect(state.unknownCount).toBe(6);
+});
+
+test('a loaded catalogue reports the genuine retirements, and only those', () => {
+  // Two genuine retirements against a catalogue that arrived: HALAL is present but
+  // deactivated, and BRC is not in the catalogue at all. Those are the only two
+  // ways a certification can actually be retired, and this is the only state in
+  // which the picker is entitled to report either.
+  //
+  // (`STORED_EZ00001` holds no HALAL, so the deactivated row has to be attached
+  // explicitly here - an earlier draft of this test assumed it was there and
+  // counted one.)
+  const types = CERT_TYPES.map((t) =>
+    t.name === 'HALAL' ? { ...t, isActive: false } : t
+  );
+  const attached = [
+    ...STORED_EZ00001,
+    { title: 'HALAL', logo: 'FileCheck', certificateLink: '/halal.pdf' },
+    { title: 'BRC', logo: 'FileCheck', certificateLink: '/brc.pdf' },
+  ];
+  const state = pickerState({ status: 'ready', types, attached });
+  expect(state.retiredCount).toBe(2);
+  expect(state.unknownCount).toBe(0);
+  expect(state.standings[0]).toBe('active'); // FSSAI, live
+  expect(state.standings[6]).toBe('retired'); // HALAL, deactivated
+  expect(state.standings[7]).toBe('retired'); // BRC, no such row
+});
+
+test('a deactivated row is retired, a deleted row is retired, an active one is not', () => {
+  // The same three claims, asserted one per line so a failure names which of them
+  // broke. All three are 'retired'/'active' - NOT 'unknown' - because the catalogue
+  // loaded.
+  const deactivated = CERT_TYPES.map((t) =>
+    t.name === 'HALAL' ? { ...t, isActive: false } : t
+  );
+  const deleted = CERT_TYPES.filter((t) => t.name !== 'HALAL');
+  expect(certificationStanding(deactivated, 'HALAL', 'ready')).toBe('retired');
+  expect(certificationStanding(deleted, 'HALAL', 'ready')).toBe('retired');
+  expect(certificationStanding(CERT_TYPES, 'HALAL', 'ready')).toBe('active');
+});
+
+test('a product with no attached entries has nothing unknown to explain', () => {
+  // The create form's starting state. `unknownCount` must not be a count of the
+  // catalogue failing to load either - it is a count of ATTACHED entries, so an
+  // empty product in a failed catalogue reads as "nothing to worry about", which is
+  // true: there is nothing at risk.
+  const state = pickerState({ status: 'error', types: [], attached: [] });
+  expect(state.unknownCount).toBe(0);
+  expect(state.retiredCount).toBe(0);
+});
+
+test('the add control is disabled unless the catalogue is loaded', () => {
+  const args = { types: CERT_TYPES, attached: [] as DietaryAttribute[] };
+  expect(pickerState({ ...args, status: 'ready' }).canAttach).toBe(true);
+  expect(pickerState({ ...args, status: 'loading' }).canAttach).toBe(false);
+  expect(pickerState({ ...args, status: 'error' }).canAttach).toBe(false);
+});
+
+test('nothing is offered from a catalogue that is not loaded', () => {
+  // Even if a previous load is still in the cache. Offering from stale rows during
+  // a loading state would be its own kind of lie, and the admin could attach a
+  // certification the catalogue no longer offers.
+  const args = { types: CERT_TYPES, attached: [] as DietaryAttribute[] };
+  expect(pickerState({ ...args, status: 'loading' }).attachable).toEqual([]);
+  expect(pickerState({ ...args, status: 'error' }).attachable).toEqual([]);
+});
+
+test('a loaded catalogue with nothing left to offer is not attachable', () => {
+  // Distinct from the two states above: here the control is disabled because the
+  // product already has everything, which is a different message.
+  const all = CERT_TYPES.map(toDietaryAttribute);
+  const state = pickerState({ status: 'ready', types: CERT_TYPES, attached: all });
+  expect(state.canAttach).toBe(false);
+  expect(state.attachable).toEqual([]);
+  expect(state.unknownCount).toBe(0);
+  expect(state.retiredCount).toBe(0);
 });
 
 /* ------------------------------------------------------------------ *

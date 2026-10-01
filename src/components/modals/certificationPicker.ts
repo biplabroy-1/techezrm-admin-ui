@@ -40,12 +40,21 @@ export type { DietaryAttribute };
  *   `ProductDetailsModal` was rendering it as `<Image src>`, which asks the browser
  *   to fetch the string "FileCheck" as a relative path and renders a broken image
  *   for every certification on the product. It is text now, next to the name.
- * - `?? ''` and not `|| ''`: the two are the same for a string, but the fallback
- *   exists to keep the stored shape total. `DietaryAttribute` declares all three
- *   fields as required, and the subdocument schema has no `_id` and no optional
- *   `logo`, so a missing icon must become `''` rather than `undefined` - which
- *   `JSON.stringify` drops from the object entirely, producing an entry with only
- *   two keys where the migration wrote three.
+ * - `?? ''` and not `|| ''`, and the reason is NOT "they differ for this field" -
+ *   for a `string | null | undefined` they are identical, verified exhaustively in
+ *   Bun and Node. They diverge only on falsy values that are not nullish (`0`,
+ *   `false`, `NaN`), which a `String` schema field cannot hold. What `??` buys is
+ *   that it substitutes ONLY for absence, so it can never fabricate a replacement
+ *   for a value that was actually there; `||` would launder a malformed stored
+ *   value into a plausible empty string. `the operator never fabricates a
+ *   replacement for a value that is present` is the test that pins that.
+ *
+ *   Separately, the fallback itself is load-bearing, and THAT part both operators
+ *   agree on: `DietaryAttribute` declares all three fields as required and the
+ *   subdocument schema has no `_id` and no optional `logo`, so an absent icon must
+ *   become `''` rather than stay `undefined` - `JSON.stringify` DROPS an undefined
+ *   property, which would send an entry with two keys where the migration wrote
+ *   three.
  */
 export function toDietaryAttribute(cert: CertificationType): DietaryAttribute {
   return {
@@ -56,28 +65,30 @@ export function toDietaryAttribute(cert: CertificationType): DietaryAttribute {
 }
 
 /**
- * Ascending `displayOrder`, stable for equal keys.
+ * Ascending `displayOrder`.
  *
- * The tiebreak on the ORIGINAL index is not decoration. `EZ-PI-00239` carries
- * `"ISO 45001:2018"` twice, and any comparator that returns 0 for equal keys makes
- * the relative order of those two entries arbitrary - which means the payload
- * could differ between two identical no-op saves. The catalogue's own
- * `displayOrder` is not unique either (`buildCertPayload` lets two rows take the
- * same number, and nothing in the schema forbids it), so a unique key cannot be
- * assumed.
+ * Sorts a COPY. The input is the react-query cache's array, and the
+ * certifications admin screen renders from that same cache - an in-place sort
+ * would silently reorder its table too.
  *
- * Sorts a COPY. The input is the react-query cache's array; sorting it in place
- * would reorder what the certifications admin screen renders from the same cache.
+ * NO TIEBREAK, and that is a deliberate non-defence rather than an oversight.
+ * An earlier version of this comment claimed the original-index tiebreak was
+ * protecting against an unstable comparator, and cited `EZ-PI-00239` - the one
+ * product that stores `"ISO 45001:2018"` twice - as the input that would go in
+ * wrong. Both halves of that were wrong: `Array.prototype.sort` has been stable
+ * by specification since ES2019 (verified identical in Bun 1.4.2 and Node 24), and
+ * this function is only ever called on CATALOGUE rows inside
+ * `attachableCertifications` - attached entries never pass through it, so a
+ * duplicated title was never an input. Deleting the tiebreak left every test
+ * green, which is the proof the property was never pinned. A comment explaining a
+ * bug that cannot occur is worse than no comment, so the rule here is only the
+ * one that is true: order by `displayOrder`, ascending, and leave equal keys
+ * wherever the engine's stability guarantee puts them.
  */
 export function sortByDisplayOrder(
   types: CertificationType[]
 ): CertificationType[] {
-  return types
-    .map((type, index) => ({ type, index }))
-    .sort(
-      (a, b) => a.type.displayOrder - b.type.displayOrder || a.index - b.index
-    )
-    .map(({ type }) => type);
+  return [...types].sort((a, b) => a.displayOrder - b.displayOrder);
 }
 
 /**
@@ -112,23 +123,116 @@ export function findCertificationType(
 }
 
 /**
- * True when the attached entry is not offered by the catalogue any more: the row
- * was deactivated, or deleted outright.
+ * Whether the catalogue can be trusted yet.
  *
- * The picker's alternative was to render attached entries only when their type is
- * still active. That was rejected: a certification the product genuinely carries
- * would be invisible in the editor while still being written on every save, so the
- * admin would see an empty list over a product that has six, the "3
- * certifications" count would be a lie, and detaching everything VISIBLE would
- * leave a hidden one attached. Retired entries are shown, and labelled - see
- * `EditProductModal`'s chip list.
+ * This exists because the picker's most damaging failure is not a wrong answer -
+ * it is a confident one. The first version of this file asked a single question,
+ * `isRetiredCertification(types, title)`, and answered `true` whenever no matching
+ * row was found. On a failed request `types` is `[]`, so EVERY attached entry
+ * reported "retired": a product with six live certifications rendered as six grey
+ * `(retired)` chips asserting "no longer offered by the active catalogue", with
+ * the add control disabled and no reason on screen. The admin's reasonable
+ * response - detach them - is the one action the whole picker was added to
+ * enable. An empty catalogue is a fact about the NETWORK, not about the
+ * certifications, and the two must not be rendered identically.
+ *
+ * There is deliberately NO default value for this parameter. A defaulted `status`
+ * would be a fresh way to write the original bug, so every caller has to state
+ * which world it is in.
  */
-export function isRetiredCertification(
+export type CatalogueStatus = 'loading' | 'error' | 'ready';
+
+/**
+ * What the catalogue says about one attached entry.
+ *
+ * - `active`  - the row exists and is active
+ * - `retired` - the row was deactivated, or deleted outright. Only ever returned
+ *               for a LOADED catalogue; it is a claim about the catalogue, so it
+ *               needs a catalogue to make it against.
+ * - `unknown` - the catalogue has not loaded, so nothing is claimed either way
+ */
+export type CertificationStanding = 'active' | 'retired' | 'unknown';
+
+/**
+ * The standing of one attached entry, given what we know about the catalogue.
+ *
+ * The asymmetry with the rest of the file is the point: 'retired' is a STATEMENT
+ * ABOUT THE CATALOGUE, and `attachableCertifications` is free to withhold
+ * inactive rows because withholding is the conservative choice. This is not -
+ * labelling a live certification "retired" is an assertion, and the only states
+ * in which the picker is entitled to make one are those where the catalogue
+ * actually arrived.
+ *
+ * The picker's rejected alternative was to render attached entries only when
+ * their type is still active. A certification the product genuinely carries would
+ * then be invisible in the editor while still being written on every save, so the
+ * admin would see an empty list over a product that has six, any count would be a
+ * lie, and detaching everything VISIBLE would leave a hidden one attached. So
+ * 'retired' entries are shown and labelled - see `EditProductModal`'s chip list -
+ * and 'unknown' entries are shown unlabelled, because there is nothing to label.
+ */
+export function certificationStanding(
   types: CertificationType[],
-  title: string
-): boolean {
+  title: string,
+  status: CatalogueStatus
+): CertificationStanding {
+  if (status !== 'ready') return 'unknown';
   const type = findCertificationType(types, title);
-  return !type || !type.isActive;
+  return !type || !type.isActive ? 'retired' : 'active';
+}
+
+/** Everything the two modals need to render the picker for one product. */
+export interface PickerState {
+  /** The add control's options. Empty unless the catalogue is ready. */
+  attachable: CertificationType[];
+  /**
+   * Whether the add control can be used at all: the catalogue is loaded AND
+   * something is left to add. A disabled control with no explanation is the other
+   * half of the original bug, so the caller gets a reason from `status`.
+   */
+  canAttach: boolean;
+  /** One standing per attached entry, in the attached list's own order. */
+  standings: CertificationStanding[];
+  /** How many entries are genuinely retired - the only number worth showing as one. */
+  retiredCount: number;
+  /**
+   * How many entries the catalogue could not speak for. Non-zero means the chip
+   * list is incomplete in a way the admin must be told about, NOT a reason to
+   * change any of them.
+   */
+  unknownCount: number;
+}
+
+/**
+ * The picker's derived state for one product, for one of the three worlds.
+ *
+ * The statuses are handled separately rather than by folding them into an empty
+ * `types` array, because they call for DIFFERENT screens: a loading catalogue
+ * wants a spinner and a disabled control, a failed one wants an error and a
+ * disabled control, and only a loaded one may make claims about retirement.
+ */
+export function pickerState(args: {
+  status: CatalogueStatus;
+  types: CertificationType[];
+  attached: DietaryAttribute[];
+}): PickerState {
+  const { status, types, attached } = args;
+  // Nothing is offered from a catalogue that is not here. `attachableCertifications`
+  // already returns [] for an empty list, so this is belt-and-braces for the case
+  // where a previous load is still cached while a refetch is in flight - offering
+  // from stale rows during a loading state would be its own lie.
+  const attachable =
+    status === 'ready' ? attachableCertifications(types, attached) : [];
+  const standings = attached.map((entry) =>
+    certificationStanding(types, entry.title, status)
+  );
+  return {
+    attachable,
+    canAttach: status === 'ready' && attachable.length > 0,
+    standings,
+    retiredCount: standings.filter((s) => s === 'retired').length,
+    unknownCount: standings.filter((s) => s === 'unknown').length,
+  };
 }
 
 /**

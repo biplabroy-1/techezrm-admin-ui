@@ -33,10 +33,10 @@ import { certificationTypeService, type CertificationType } from '@/api/services
 import { toast } from 'react-toastify';
 import { primaryCategoryId, type DietaryAttribute } from './buildUpdateProductFormData';
 import {
-  attachableCertifications,
   attachCertification,
   detachCertificationAt,
-  isRetiredCertification,
+  pickerState,
+  type CatalogueStatus,
 } from './certificationPicker';
 
 interface AddProductModalProps {
@@ -148,31 +148,72 @@ export default function AddProductModal({
   /**
    * The global catalogue of certifications, on the same query key the edit form and
    * the certifications admin screen use - so all three share one cache entry.
+   *
+   * `isError` is read for the same reason the edit form reads it: `certTypes` is
+   * `[]` on a failure, so without it a 500 renders an empty dropdown with no
+   * explanation and the admin cannot tell a broken catalogue from a product that
+   * has everything.
    */
-  const { data: certTypesData, isLoading: certTypesLoading } = useQuery({
+  const {
+    data: certTypesData,
+    isLoading: certTypesLoading,
+    isError: certTypesError,
+  } = useQuery({
     queryKey: ['certificationTypes'],
     queryFn: certificationTypeService.getAll,
     enabled: open,
   });
 
+  const certCatalogueStatus: CatalogueStatus = certTypesError
+    ? 'error'
+    : certTypesLoading || !certTypesData
+      ? 'loading'
+      : 'ready';
+
   const certTypes: CertificationType[] = certTypesData?.data ?? [];
 
   /**
-   * Empty at create, so this is the whole catalogue, filtered to the active rows -
-   * but it goes through the same helper the edit form uses rather than rendering
-   * `certTypes` directly, so "which rows may be attached" and "in what order" is
-   * decided in exactly one place. If that rule changes, both forms change.
+   * The same derived state the edit form uses, rather than rendering `certTypes`
+   * directly - so "which rows may be attached", "in what order" and "may anything
+   * be attached at all right now" is decided in exactly one place. If that rule
+   * changes, both forms change.
+   *
+   * At create the attached list starts empty and only ever grows through
+   * `attachableCerts`, which is filtered to active rows, so no attached entry can
+   * be retired here. `standings` is therefore not read in this form: the retired
+   * label is unreachable at create time, and adding UI for an unreachable state
+   * would be worse than not having it. `retiredCount` and `unknownCount` go unused
+   * for the same reason.
    */
-  const attachableCerts = attachableCertifications(
-    certTypes,
-    formData.dietaryAttributes
-  );
+  const { attachable: attachableCerts, canAttach } = pickerState({
+    status: certCatalogueStatus,
+    types: certTypes,
+    attached: formData.dietaryAttributes,
+  });
+
+  /**
+   * The pending pick, held rather than derived, so the Select only CHOOSES and the
+   * button commits. The previous version committed on change AND had a button that
+   * committed `attachableCerts[0]`, so picking "KOSHER" and clicking Add attached
+   * HALAL. This matches the Applications/Functions/Category controls' shape of a
+   * choose-then-commit pair.
+   */
+  const [pendingCertId, setPendingCertId] = useState('');
 
   const addCertification = (cert: CertificationType) => {
+    setPendingCertId('');
     setFormData((prev) => ({
       ...prev,
       dietaryAttributes: attachCertification(prev.dietaryAttributes, cert),
     }));
+  };
+
+  const commitPendingCertification = () => {
+    if (!canAttach) return;
+    // Looked up rather than trusted from state: the catalogue can change between
+    // the pick and the click, and `addCertification(undefined)` would throw.
+    const picked = attachableCerts.find((c) => c._id === pendingCertId);
+    if (picked) addCertification(picked);
   };
 
   /** By index: two chips can carry the same title, and a click means one of them. */
@@ -288,6 +329,9 @@ export default function AddProductModal({
     setBannerImage(null);
     setImages([]);
     setErrors({});
+    // With the rest of the form state: a pick left in the dropdown would be waiting
+    // for the next product created in this same dialog.
+    setPendingCertId('');
     onClose();
   };
 
@@ -461,6 +505,12 @@ export default function AddProductModal({
            * PDF, neither of which is editable per product - the whole field is a
            * selection, so it is presented as one rather than as three free-text
            * boxes that could store a value the storefront cannot render.
+           *
+           * No "(retired)" label here, unlike the edit form, and that is on
+           * purpose: at create time the list starts empty and only ever grows
+           * through `attachableCerts`, which is filtered to active rows, so a
+           * retired entry cannot exist yet. The retired path stays unreachable in
+           * this form rather than gaining UI it can never take.
            */}
           <Box sx={{ mt: 3 }}>
             <Typography
@@ -473,20 +523,10 @@ export default function AddProductModal({
               <FormControl fullWidth size="small">
                 <InputLabel>Select Certification</InputLabel>
                 <Select
-                  value=""
-                  displayEmpty
-                  onChange={(e) => {
-                    const picked = attachableCerts.find(
-                      (c) => c._id === e.target.value
-                    );
-                    // Looked up out of `attachableCerts` rather than trusted from
-                    // the event: a re-render between the click and this handler can
-                    // leave a stale id, and `undefined.name` would take the dialog
-                    // down.
-                    if (picked) addCertification(picked);
-                  }}
+                  value={pendingCertId}
+                  onChange={(e) => setPendingCertId(e.target.value as string)}
                   label="Select Certification"
-                  disabled={certTypesLoading || attachableCerts.length === 0}
+                  disabled={!canAttach}
                 >
                   {attachableCerts.map((cert) => (
                     <MenuItem key={cert._id} value={cert._id}>
@@ -497,11 +537,8 @@ export default function AddProductModal({
               </FormControl>
               <Button
                 variant="contained"
-                onClick={() => {
-                  const picked = attachableCerts[0];
-                  if (picked) addCertification(picked);
-                }}
-                disabled={certTypesLoading || attachableCerts.length === 0}
+                onClick={commitPendingCertification}
+                disabled={!canAttach || !pendingCertId}
               >
                 Add
               </Button>
@@ -531,10 +568,23 @@ export default function AddProductModal({
                 ))
               )}
             </Box>
+            {certCatalogueStatus === 'error' && (
+              <Alert severity="warning" sx={{ mb: 1 }}>
+                Could not load the certification catalogue, so none can be attached
+                to this product. Everything else will still be created - close and
+                reopen this dialog to try again, or add the certifications from the
+                product&apos;s edit screen afterwards.
+              </Alert>
+            )}
+
             <FormHelperText>
-              {formData.dietaryAttributes.length === 0
-                ? 'Optional. Only certifications still active in the catalogue can be attached.'
-                : `${formData.dietaryAttributes.length} attached. The icon name and the PDF link come from the catalogue.`}
+              {certCatalogueStatus === 'loading'
+                ? 'Loading the certification catalogue...'
+                : certCatalogueStatus === 'error'
+                  ? 'The add control is disabled while the catalogue is unavailable.'
+                  : formData.dietaryAttributes.length === 0
+                    ? 'Optional. Only certifications still active in the catalogue can be attached.'
+                    : `${formData.dietaryAttributes.length} attached. The icon name and the PDF link come from the catalogue.`}
             </FormHelperText>
           </Box>
 
