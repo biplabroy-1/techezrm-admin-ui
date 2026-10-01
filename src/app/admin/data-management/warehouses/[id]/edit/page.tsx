@@ -20,7 +20,9 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import MyLocationIcon from '@mui/icons-material/MyLocation';
 import { toast } from 'react-toastify';
+import { useFillFromLocation } from '@/hooks/useFillFromLocation';
 import { warehouseService } from '@/api/services/warehouses';
 
 const LIST_PATH = '/admin/data-management/warehouses';
@@ -142,6 +144,30 @@ export default function EditWarehousePage() {
     onError: (e: any) => toast.error(e?.message || 'Failed to update warehouse'),
   });
 
+  // Fills street, city, state, country and zipCode from the device's GPS fix.
+  // Only empty fields are written, so an address already on file is not silently
+  // replaced because the fix landed in a different administrative boundary.
+  const { locating, fill } = useFillFromLocation<FormState>();
+
+  const useCurrentLocation = async () => {
+    await fill(form, {
+
+      street: 'street',
+      city: 'city',
+      state: 'state',
+      country: 'country',
+      zipCode: 'postcode',
+    }, (patch) => {
+      setForm((prev) => ({ ...prev, ...patch }));
+      // Clear any "this field is required" captions the new values satisfied.
+      setErrors((prev) => {
+        const clean = { ...prev };
+        for (const k of Object.keys(patch)) delete clean[k as keyof typeof clean];
+        return clean;
+      });
+    });
+  };
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!validate()) return;
@@ -259,6 +285,17 @@ export default function EditWarehousePage() {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField fullWidth label="Zip Code" value={form.zipCode} onChange={handleChange('zipCode')} />
+                </Grid>
+                <Grid size={12}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<MyLocationIcon />}
+                    onClick={useCurrentLocation}
+                    disabled={locating}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    {locating ? 'Locating...' : 'Use current location to fill the address'}
+                  </Button>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField fullWidth label="Latitude" value={form.latitude} onChange={handleChange('latitude')} />

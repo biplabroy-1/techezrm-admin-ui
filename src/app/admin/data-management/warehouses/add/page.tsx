@@ -21,6 +21,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import { warehouseService } from '@/api/services/warehouses';
+import { useFillFromLocation } from '@/hooks/useFillFromLocation';
 import { toast } from 'react-toastify';
 
 type Field =
@@ -79,7 +80,6 @@ export default function AddWarehousePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
-  const [locating, setLocating] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
 
   const handleChange =
@@ -163,36 +163,28 @@ export default function AddWarehousePage() {
    * GPS indoors". Geolocation is only exposed on a secure origin, so this works
    * on localhost and over HTTPS but not on a plain-HTTP LAN address.
    */
-  const useCurrentLocation = () => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      toast.error('This browser cannot detect your location.');
-      return;
-    }
 
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocating(false);
-        setForm((prev) => ({
-          ...prev,
-          latitude: position.coords.latitude.toFixed(6),
-          longitude: position.coords.longitude.toFixed(6),
-        }));
-        setErrors((prev) => ({ ...prev, latitude: '', longitude: '' }));
-        toast.success('Location filled in from your device.');
-      },
-      (error) => {
-        setLocating(false);
-        const message =
-          error.code === error.PERMISSION_DENIED
-            ? 'Location permission denied. Allow it in your browser, or type the coordinates in.'
-            : error.code === error.TIMEOUT
-              ? 'Timed out while getting your location. Try again, or type the coordinates in.'
-              : 'Could not determine your location. Type the coordinates in manually.';
-        toast.error(message);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+  // Fills street, city, state, country and zipCode from the device's GPS fix.
+  // Only empty fields are written, so anything typed already is kept.
+  const { locating, fill } = useFillFromLocation<FormState>();
+
+  const useCurrentLocation = async () => {
+    await fill(form, {
+
+      street: 'street',
+      city: 'city',
+      state: 'state',
+      country: 'country',
+      zipCode: 'postcode',
+    }, (patch) => {
+      setForm((prev) => ({ ...prev, ...patch }));
+      // Clear any "this field is required" captions the new values satisfied.
+      setErrors((prev) => {
+        const clean = { ...prev };
+        for (const k of Object.keys(patch)) delete clean[k as keyof typeof clean];
+        return clean;
+      });
+    });
   };
 
   const handleSubmit = (event: React.FormEvent) => {

@@ -36,6 +36,10 @@ export const ENDPOINTS = {
     GET: `${BASE_URL}/private/customer-orders`,
     GET_BY_ID: `${BASE_URL}/private/customer-orders/:id`,
   },
+  // Maps / geocoding endpoints
+  MAPS: {
+    REVERSE_GEOCODE: `${BASE_URL}/public/maps/reverse-geocode`,
+  },
   // Customer Reviews endpoints
   CUSTOMER_REVIEWS: {
     GET: `${BASE_URL}/private/customer-reviews`,

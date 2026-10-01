@@ -18,11 +18,13 @@ import {
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import MyLocationIcon from '@mui/icons-material/MyLocation';
 import {
   supplierService,
   type CreateSupplierRequest,
 } from '@/api/services/suppliers';
 import { toast } from 'react-toastify';
+import { useFillFromLocation } from '@/hooks/useFillFromLocation';
 import { SUPPLIER_PAYMENT_METHODS } from '@/constants/suppliers';
 
 type Field =
@@ -129,6 +131,28 @@ export default function AddSupplierPage() {
     },
   });
 
+  // Fills the free-text address and the country from the device's GPS fix, plus
+  // latitude/longitude. Suppliers have no separate city/state/postcode fields, so
+  // the geocoder's one-line formatted address is what lands in `address`. Only
+  // empty fields are written.
+  const { locating, fill } = useFillFromLocation<FormState>();
+
+  const useCurrentLocation = async () => {
+    await fill(form, {
+
+      address: 'formattedAddress',
+      country: 'country',
+    }, (patch) => {
+      setForm((prev) => ({ ...prev, ...patch }));
+      // Clear any "this field is required" captions the new values satisfied.
+      setErrors((prev) => {
+        const clean = { ...prev };
+        for (const k of Object.keys(patch)) delete clean[k as keyof typeof clean];
+        return clean;
+      });
+    });
+  };
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!validate()) return;
@@ -231,6 +255,17 @@ export default function AddSupplierPage() {
                   />
                 </Grid>
 
+                <Grid size={12}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<MyLocationIcon />}
+                    onClick={useCurrentLocation}
+                    disabled={locating}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    {locating ? 'Locating...' : 'Use current location to fill the address'}
+                  </Button>
+                </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     fullWidth

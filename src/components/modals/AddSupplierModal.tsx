@@ -17,6 +17,7 @@ import {
   CreateSupplierRequest,
 } from '../../api/services/suppliers';
 import { toast } from 'react-hot-toast';
+import { useFillFromLocation } from '@/hooks/useFillFromLocation';
 import { SUPPLIER_PAYMENT_METHODS } from '@/constants/suppliers';
 
 interface AddSupplierModalProps {
@@ -106,50 +107,53 @@ export default function AddSupplierModal({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [locating, setLocating] = useState(false);
+
 
   /**
-   * Fill the coordinates from the browser's geolocation.
+   * Fill the coordinates and address from the device's GPS fix.
    *
-   * Mirrors the warehouse form's affordance, for the same reason: making someone
-   * type a latitude by hand is a poor way to record where their own supplier is.
-   *
-   * Every failure mode gets its own message, because they call for different
-   * actions - a denied permission and an unavailable fix are both an opaque
-   * `code 1` in some browsers, and "unavailable" usually just means no GPS
-   * indoors. Geolocation is only exposed on a secure origin, so this works on
-   * localhost and over HTTPS but not on a plain-HTTP LAN address.
+   * Country is a dropdown here, not a text field, so it maps to the geocoder's
+   * ISO country code ("IN") rather than its name ("India"). The shared hook only
+   * writes empty fields, and it writes country only when the dropdown has no value
+   * yet - if the geocoded country is not one of the listed options there is nothing
+   * sensible to select, so that field is left alone for the user to pick.
    */
-  const useCurrentLocation = () => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      toast.error('This browser cannot detect your location.');
-      return;
-    }
+  const { locating, fill } = useFillFromLocation<CreateSupplierRequest>();
 
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocating(false);
-        setFormData((prev) => ({
-          ...prev,
-          latitude: position.coords.latitude.toFixed(6),
-          longitude: position.coords.longitude.toFixed(6),
-        }));
-        setErrors((prev) => ({ ...prev, latitude: '', longitude: '' }));
-        toast.success('Location filled in from your device.');
-      },
-      (error) => {
-        setLocating(false);
-        const message =
-          error.code === error.PERMISSION_DENIED
-            ? 'Location permission denied. Allow it in your browser, or type the coordinates in.'
-            : error.code === error.TIMEOUT
-              ? 'Timed out while getting your location. Try again, or type the coordinates in.'
-              : 'Could not determine your location. Type the coordinates in manually.';
-        toast.error(message);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+  const useCurrentLocation = async () => {
+    // `apply` is called once with the coordinates (as soon as the GPS fix lands) and
+    // again with the address fields. The country needs post-processing each time,
+    // so the handler is shared rather than applied inline.
+    const apply = (patch: any) => {
+      // The country dropdown holds an ISO code ("IN"), not the geocoder's country
+      // name ("India"), so the mapped value is resolved against the option list
+      // rather than assigned verbatim. If the geocoded country is not one of the
+      // listed options there is nothing sensible to select, so the field is left
+      // alone for the user to choose rather than silently showing a blank.
+      const next = { ...patch };
+      delete next.country;
+      const wanted = String(patch.country ?? '').toLowerCase();
+      if (wanted && !formData.country) {
+        const match = countries.find(
+          (c) => c.label.toLowerCase() === wanted || c.value.toLowerCase() === wanted
+        );
+        if (match) next.country = match.value;
+      }
+
+      setFormData((prev) => ({ ...prev, ...next }));
+      setErrors((prev) => {
+        const clean = { ...prev };
+        for (const k of Object.keys(next)) clean[k] = '';
+        return clean;
+      });
+    };
+
+    await fill(formData, {
+      latitude: 'latitude',
+      longitude: 'longitude',
+      address: 'formattedAddress',
+      country: 'country',
+    }, apply);
   };
 
   const validateForm = (): boolean => {
