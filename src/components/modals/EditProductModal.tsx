@@ -37,6 +37,10 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { productService } from '@/api/services/products';
 import { productFiltersService } from '@/api/services';
+import {
+  buildUpdateProductFormData,
+  type DietaryAttribute,
+} from './buildUpdateProductFormData';
 
 interface EditProductModalProps {
   open: boolean;
@@ -56,16 +60,13 @@ interface EditProductModalProps {
     unit?: string;
     tags?: string[];
     appearance?: string;
+    dietaryAttributes?: DietaryAttribute[];
+    /** Free-form spec rows. Keys are preserved verbatim, trailing space included. */
+    specifications?: Record<string, string>;
     applications?: string[];
     functions?: string[];
     countryOfOrigin?: string[];
   };
-}
-
-interface DietaryAttribute {
-  title: string;
-  logo: string;
-  certificateLink: string;
 }
 
 export default function EditProductModal({
@@ -85,6 +86,7 @@ export default function EditProductModal({
     unit: '',
     appearance: '',
     tags: [] as string[],
+    specifications: {} as Record<string, string>,
     dietaryAttributes: [] as DietaryAttribute[],
     applications: [] as string[],
     functions: [] as string[],
@@ -152,7 +154,10 @@ export default function EditProductModal({
         unit: product.unit || '',
         appearance: product.appearance || '',
         tags: product.tags || [],
-        dietaryAttributes: [],
+        specifications: product.specifications ?? {},
+        // Was a hardcoded [], so every stored certificate was invisible to the
+        // form and the next save looked like a delete.
+        dietaryAttributes: product.dietaryAttributes ?? [],
         applications: product.applications || [],
         functions: product.functions || [],
         countryOfOrigin: product.countryOfOrigin || [],
@@ -290,27 +295,18 @@ export default function EditProductModal({
       return;
     }
 
-    // Create FormData for multipart/form-data
-    const formDataToSend = new FormData();
+    // Create FormData for multipart/form-data.
+    //
+    // `specifications` and `dietaryAttributes` are appended by the builder, always
+    // and even when empty - the server treats an absent key as "leave alone", so
+    // omitting an emptied field would silently undo the admin's delete.
+    //
+    // The four array fields below are still built here rather than in the builder
+    // because they get slugified on the way out, and slugifying a migrated value
+    // like "CAS No: 14281-83-5" destroys it. That fix is a separate change and
+    // moving them now would half-apply it.
+    const formDataToSend = buildUpdateProductFormData(formData);
 
-    // Add all the fields
-    formDataToSend.append('name', formData.name);
-    formDataToSend.append('description', formData.description || '');
-    formDataToSend.append('price', formData.price.toString());
-    formDataToSend.append('category', formData.category || '');
-    formDataToSend.append('inStock', formData.inStock.toString());
-    formDataToSend.append('status', formData.status);
-    formDataToSend.append('moq', formData.moq?.toString() || '');
-    formDataToSend.append('unit', formData.unit || '');
-    formDataToSend.append('appearance', formData.appearance || '');
-    formDataToSend.append('bannerImage', formData.bannerImage || '');
-
-    // Add images array
-    if (formData.images && formData.images.length > 0) {
-      formDataToSend.append('images', JSON.stringify(formData.images));
-    }
-
-    // Add arrays as JSON strings with proper identifiers
     if (formData.tags && formData.tags.length > 0) {
       // Convert tag names to slugs
       const tagSlugs = formData.tags.map((tagName) => {

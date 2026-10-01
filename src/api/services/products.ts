@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { api } from '../config';
+import { appendReplaceJson, type DietaryAttribute } from '../../components/modals/buildUpdateProductFormData';
 
 export interface Product {
   /**
@@ -32,6 +33,8 @@ export interface Product {
     logo: string;
     certificateLink: string;
   }>;
+  /** Free-form spec rows. Keys are preserved verbatim, trailing space included. */
+  specifications?: Record<string, string>;
   applications?: string[];
   functions?: string[];
   countryOfOrigin?: string[];
@@ -49,6 +52,12 @@ export interface CreateProductRequest {
   images?: File[];
   /** Free-form labels. The Product model declares `tags: [String]`. */
   tags?: string[];
+  /**
+   * Free-form spec rows and certification links, sent as JSON strings because a
+   * multipart part is always text - the server decodes them with `parseJsonField`.
+   */
+  specifications?: Record<string, string>;
+  dietaryAttributes?: DietaryAttribute[];
 }
 
 /**
@@ -206,6 +215,13 @@ class ProductService {
           formData.append('tags', tag);
         });
       }
+
+      // Always sent, including as `{}` / `[]`. There is nothing stored to clear on
+      // a create, so this is only about the server's decode step: these are
+      // `Mixed` / subdocument paths, and an undecoded JSON string would be stored
+      // verbatim as the text `'{"Form":"Powder"}'`.
+      appendReplaceJson(formData, 'specifications', data.specifications ?? {});
+      appendReplaceJson(formData, 'dietaryAttributes', data.dietaryAttributes ?? []);
   
       const response = await api.post(this.baseUrl, formData, {
         headers: {

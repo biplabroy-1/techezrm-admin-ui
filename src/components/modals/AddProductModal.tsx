@@ -20,6 +20,7 @@ import ReactSelect from 'react-select';
 import CloseIcon from '@mui/icons-material/Close';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import { useCreateProduct } from '../../hooks/useProducts';
+import type { DietaryAttribute } from './buildUpdateProductFormData';
 
 interface AddProductModalProps {
   open: boolean;
@@ -94,6 +95,11 @@ export default function AddProductModal({
     price: '',
     category: '',
     inStock: true,
+    // Not editable in this form yet (no editor UI, same as dietaryAttributes on
+    // the product list) but declared so the pair is threaded through to the
+    // multipart body rather than being forgotten at the type level.
+    specifications: {} as Record<string, string>,
+    dietaryAttributes: [] as DietaryAttribute[],
   });
 
   const [bannerImage, setBannerImage] = useState<File | null>(null);
@@ -140,6 +146,9 @@ export default function AddProductModal({
         inStock: formData.inStock,
         bannerImage: bannerImage || undefined,
         images: images.length > 0 ? images : undefined,
+        // Appended as JSON strings by productService.createProduct.
+        specifications: formData.specifications,
+        dietaryAttributes: formData.dietaryAttributes,
       };
 
       const result = await createProduct.mutateAsync(productData);
@@ -160,6 +169,8 @@ export default function AddProductModal({
       price: '',
       category: '',
       inStock: true,
+      specifications: {},
+      dietaryAttributes: [],
     });
     setBannerImage(null);
     setImages([]);
