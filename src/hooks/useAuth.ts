@@ -61,14 +61,31 @@ export const useLogin = () => {
     onMutate: () => {
       setLoading(true);
     },
-    onSuccess: (data) => {
-      // Store token in localStorage
-      if (data.data?.token) {
-        localStorage.setItem('auth-token', data.data.token);
+    onSuccess: (body) => {
+      // The API answers { success, data: { token, name, email, role } } - flat,
+      // with no nested `user` object.
+      //
+      // This used to read `data.data.user`, which is undefined, so the store was
+      // handed `user: undefined` and no screen could ever know the logged-in role.
+      // That is why the nav could not be filtered by role at all - there was
+      // nothing to filter on. Build the user from what the API actually returns.
+      const d = body?.data ?? {};
+      const token = d.token ?? '';
+
+      if (token) {
+        localStorage.setItem('auth-token', token);
       }
 
-      // Update auth store
-      login(data.data.user, data.data.token);
+      login(
+        {
+          // The login response carries no id, so the email stands in as one.
+          id: d.id ?? d.email ?? '',
+          email: d.email ?? '',
+          name: d.name ?? '',
+          role: d.role,
+        },
+        token
+      );
     },
     onError: (error) => {
       console.error('Login error:', error);

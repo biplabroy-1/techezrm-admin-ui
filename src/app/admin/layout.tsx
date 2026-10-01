@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   CssBaseline,
@@ -24,6 +24,7 @@ import Image from 'next/image';
 import { useLogout } from '@/hooks/useAuth';
 import { useAuthStore } from '@/store/authStore';
 import GlobalSearchModal from '@/components/GlobalSearchModal';
+import { canSeePath } from '@/utils/navVisibility';
 import NotificationDropdown from '@/components/NotificationDropdown';
 
 // Define types for our sidebar items with nested dropdowns
@@ -169,6 +170,61 @@ export default function AdminLayout({
 
   // Auth hooks
   const { user, isAuthenticated } = useAuthStore();
+
+  /**
+   * The nav filtered to what this role may use.
+   *
+   * Hiding a menu item is presentation, not enforcement - the API decides. This
+   * mirrors the server's permission table (src/utils/permissions.ts) so the menu
+   * never offers something that will 403, and never hides something that would
+   * have worked.
+   *
+   * Filtering recurses into dropdowns, and a section left with no visible children
+   * is dropped entirely rather than showing an empty heading.
+   */
+  const visibleSidebarItems = useMemo<SidebarItem[]>(() => {
+    const role = user?.role;
+
+    // Recurses into nestedOptions as well as options. Logistics > Warehouse is a
+    // NESTED dropdown holding Add/Delete/Update/View Stock, so filtering only the
+    // first level hid Delete Product/Category correctly while leaving Delete Stock
+    // visible to STAFF - a test caught that, and typing the URL would have hit a
+    // 403 the menu had promised was not there.
+    const filterNested = (options?: NestedDropdownOption[]): NestedDropdownOption[] | undefined =>
+      options?.filter((o) => !o.path || canSeePath(role, o.path));
+
+    const filterOptions = (options?: DropdownOption[]): DropdownOption[] => {
+      if (!options) return [];
+      return options
+        .filter((o) => !o.path || canSeePath(role, o.path))
+        .map((o) => {
+          const nested = filterNested(o.nestedOptions);
+          return nested ? { ...o, nestedOptions: nested } : o;
+        })
+        // A nested parent whose children were all filtered away has nothing left
+        // to expand, so drop it rather than showing an inert header.
+        .filter((o) => !o.nestedOptions || o.nestedOptions.length > 0);
+    };
+
+    const out: SidebarItem[] = [];
+    for (const item of sidebarItems) {
+      if (item.isLogout) {
+        out.push(item);
+        continue;
+      }
+      // A top-level item gated by path.
+      if (item.path && !canSeePath(role, item.path)) continue;
+
+      if (item.hasDropdown && item.options) {
+        const options = filterOptions(item.options);
+        if (!options.length) continue; // nothing left to show
+        out.push({ ...item, options });
+        continue;
+      }
+      out.push(item);
+    }
+    return out;
+  }, [user?.role]);
   const logoutMutation = useLogout();
 
   // Add mounted state to prevent hydration issues
@@ -502,7 +558,7 @@ export default function AdminLayout({
           }}
         >
           <List>
-            {sidebarItems.map((item) => (
+            {visibleSidebarItems.map((item) => (
               <React.Fragment key={item.text}>
                 {item.hasDropdown ? (
                   <>
