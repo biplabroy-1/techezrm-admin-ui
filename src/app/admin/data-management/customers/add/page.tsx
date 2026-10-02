@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { customerService } from '@/api/services/customers';
+import { buildCreateCustomerPayload, type CustomerFormValues } from '@/components/modals/buildCreateCustomerPayload';
 import { toast } from 'react-toastify';
 
 /**
@@ -60,26 +61,7 @@ import { toast } from 'react-toastify';
  * can see on this form.
  */
 
-type FormState = {
-  name: string;
-  email: string;
-  phone: string;
-  companyName: string;
-  industry: string;
-  website: string;
-  employeeCount: string;
-  annualRevenue: string;
-  businessType: string;
-  taxId: string;
-  registrationNumber: string;
-  contactPerson: string;
-  contactPersonEmail: string;
-  contactPersonPhone: string;
-  notes: string;
-  status: string;
-  membershipTier: string;
-  signupStep: string;
-};
+type FormState = CustomerFormValues;
 
 const INITIAL_FORM: FormState = {
   name: '',
@@ -178,15 +160,12 @@ export default function AddCustomerPage() {
   };
 
   const mutation = useMutation({
-    mutationFn: () =>
-      customerService.createCustomer({
-        ...form,
-        // The model lowercases and trims email on save, so sending the raw value
-        // keeps the request honest about what was typed.
-        email: form.email.trim(),
-        loginApproval: true,
-        addresses: [],
-      }),
+    // The payload is built, not spread inline. Spreading `{...form}` sent `""` for
+    // every dropdown left alone, and because businessType / annualRevenue /
+    // employeeCount are ENUM fields on the model, mongoose rejected the whole
+    // document for three fields the admin had never touched. See
+    // `buildCreateCustomerPayload` for the rule and the test that pins it.
+    mutationFn: () => customerService.createCustomer(buildCreateCustomerPayload(form)),
     onSuccess: (response) => {
       if (response?.success === false) {
         toast.error(response.message || 'Failed to create customer');

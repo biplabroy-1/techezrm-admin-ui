@@ -30,7 +30,15 @@ export interface Customer {
 export interface CreateCustomerRequest {
   name: string;
   email: string;
-  phone: string;
+  /**
+   * Optional, and was not before.
+   *
+   * `phone` has `// required: true` commented out in `server/src/models/customer.ts`,
+   * so the server never demanded it - this type simply claimed it did, and the add
+   * form could not honour the claim without either blocking on a field the server
+   * treats as optional or sending `""` for it. See `buildCreateCustomerPayload`.
+   */
+  phone?: string;
   membershipTier: string;
   status: string;
   loginApproval: boolean;
