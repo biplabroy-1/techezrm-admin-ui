@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -27,6 +27,7 @@ import {
   Checkbox,
   ListItemText,
   FormHelperText,
+  Tooltip,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -36,7 +37,11 @@ import {
   Info as InfoIcon,
   Category as CategoryIcon,
   Verified as VerifiedIcon,
+  CloudUpload as CloudUploadIcon,
+  DeleteOutline as DeleteOutlineIcon,
+  Image as ImageIcon,
 } from '@mui/icons-material';
+import { uploadService } from '@/api/services/upload';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { productService } from '@/api/services/products';
@@ -127,8 +132,27 @@ export default function EditProductModal({
   const [applicationInput, setApplicationInput] = useState('');
   const [functionInput, setFunctionInput] = useState('');
   const [countryInput, setCountryInput] = useState('');
-  const [bannerImageInput, setBannerImageInput] = useState('');
-  const [imageInput, setImageInput] = useState('');
+  /**
+   * Image uploads.
+   *
+   * This section used to be two URL text boxes and a row of Chips showing
+   * truncated URLs, which asked an admin to paste a link instead of choosing a
+   * file - and never showed the image, so there was nothing to check the upload
+   * against. Files are uploaded on selection and only the resulting URLs go into
+   * `formData`, because that is what the product write already carries.
+   *
+   * Two rules the server imposes:
+   *  - `PUT /products/:id` replaces `images` wholesale when multer received any
+   *    file, so a newly picked file cannot be merged server-side with the URLs
+   *    already stored. Uploading first and sending the full final URL list keeps
+   *    "add" and "replace" both working. See api/services/upload.ts.
+   *  - the server holds a POST /upload/multiple-cloud capped at 10 files, so
+   *    uploadService batches.
+   */
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const imagesInputRef = useRef<HTMLInputElement>(null);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [imagesUploading, setImagesUploading] = useState(false);
   /**
    * Editing buffer for the specifications editor. `formData.specifications` is
    * what actually gets saved; the rows are what is on screen. They are kept in
@@ -533,14 +557,53 @@ const countryOptions = filtersData?.data?.countryOfOrigin || [];
     }));
   };
 
-  const handleAddImage = () => {
-    if (imageInput.trim() && !formData.images.includes(imageInput.trim())) {
+  const handleBannerFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Clear immediately: re-picking the same file must fire change again.
+    event.target.value = '';
+    if (!file) return;
+
+    setBannerUploading(true);
+    try {
+      const uploaded = await uploadService.uploadSingle(file);
+      setFormData((prev) => ({ ...prev, bannerImage: uploaded.url }));
+      toast.success('Banner image uploaded');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to upload the banner image');
+    } finally {
+      setBannerUploading(false);
+    }
+  };
+
+  const handleImageFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (files.length === 0) return;
+
+    setImagesUploading(true);
+    try {
+      const uploaded = await uploadService.uploadMultiple(files);
       setFormData((prev) => ({
         ...prev,
-        images: [...prev.images, imageInput.trim()],
+        // Skip any URL already present, so the same file cannot be added twice.
+        images: [...prev.images, ...uploaded.map((u) => u.url)].filter(
+          (url, i, all) => all.indexOf(url) === i
+        ),
       }));
-      setImageInput('');
+      toast.success(
+        uploaded.length === 1
+          ? 'Image uploaded'
+          : `${uploaded.length} images uploaded`
+      );
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to upload the images');
+    } finally {
+      setImagesUploading(false);
     }
+  };
+
+  const handleRemoveBanner = () => {
+    setFormData((prev) => ({ ...prev, bannerImage: '' }));
   };
 
   const handleRemoveImage = (imageToRemove: string) => {
@@ -613,8 +676,7 @@ const countryOptions = filtersData?.data?.countryOfOrigin || [];
     setApplicationInput('');
     setFunctionInput('');
     setCountryInput('');
-    setBannerImageInput('');
-    setImageInput('');
+
     // The pending certification pick is cleared with the other input buffers. The
     // modal is reused across products, so a pick left behind would be sitting in
     // the dropdown when the next product opens - offering to add a certification
@@ -1748,22 +1810,114 @@ const countryOptions = filtersData?.data?.countryOfOrigin || [];
                         color="textSecondary"
                         sx={{ fontWeight: 600, mb: 2 }}
                       >
-                        Banner Image URL
+                        Banner Image
                       </Typography>
-                      <TextField
-                        fullWidth
-                        value={formData.bannerImage}
-                        onChange={(e) =>
-                          handleInputChange('bannerImage', e.target.value)
-                        }
-                        placeholder="https://example.com/banner-image.jpg"
-                        size="small"
-                        sx={{
-                          '& .MuiOutlinedInput-root': {
-                            borderRadius: 2,
-                          },
-                        }}
+
+                      {/* Hidden file inputs; the visible buttons trigger them, so
+                          the admin never handles a raw path. */}
+                      <input
+                        ref={bannerInputRef}
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={handleBannerFile}
                       />
+
+                      {formData.bannerImage ? (
+                        <Box
+                          sx={{
+                            position: 'relative',
+                            display: 'inline-block',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            border: '1px solid #e0e0e0',
+                            lineHeight: 0,
+                          }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={formData.bannerImage}
+                            alt="Product banner"
+                            style={{ width: 260, height: 140, objectFit: 'cover' }}
+                          />
+                          <Box
+                            sx={{
+                              position: 'absolute',
+                              top: 6,
+                              right: 6,
+                              display: 'flex',
+                              gap: 0.5,
+                            }}
+                          >
+                            <Tooltip title="Replace">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  disabled={bannerUploading}
+                                  onClick={() => bannerInputRef.current?.click()}
+                                  sx={{
+                                    bgcolor: 'rgba(255,255,255,0.9)',
+                                    '&:hover': { bgcolor: '#fff' },
+                                  }}
+                                >
+                                  {bannerUploading ? (
+                                    <CircularProgress size={16} />
+                                  ) : (
+                                    <CloudUploadIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                            <Tooltip title="Remove">
+                              <IconButton
+                                size="small"
+                                onClick={handleRemoveBanner}
+                                sx={{
+                                  bgcolor: 'rgba(255,255,255,0.9)',
+                                  '&:hover': { bgcolor: '#fff' },
+                                }}
+                              >
+                                <DeleteOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </Box>
+                      ) : (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            p: 2,
+                            border: '1px dashed #ccc',
+                            borderRadius: 2,
+                          }}
+                        >
+                          <ImageIcon color="disabled" />
+                          <Typography variant="caption" color="textSecondary">
+                            No banner image
+                          </Typography>
+                        </Box>
+                      )}
+
+                      <Box sx={{ mt: 1 }}>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          disabled={bannerUploading}
+                          startIcon={
+                            bannerUploading ? (
+                              <CircularProgress size={16} />
+                            ) : (
+                              <CloudUploadIcon />
+                            )
+                          }
+                          onClick={() => bannerInputRef.current?.click()}
+                          sx={{ borderRadius: 2, textTransform: 'none' }}
+                        >
+                          {formData.bannerImage ? 'Replace Banner' : 'Upload Banner'}
+                        </Button>
+                      </Box>
                     </Box>
 
                     <Divider />
@@ -1778,40 +1932,35 @@ const countryOptions = filtersData?.data?.countryOfOrigin || [];
                         Product Images
                       </Typography>
 
-                      <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                        <TextField
-                          fullWidth
-                          label="Add Image URL"
-                          value={imageInput}
-                          onChange={(e) => setImageInput(e.target.value)}
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleAddImage();
-                            }
-                          }}
-                          size="small"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                            },
-                          }}
-                        />
+                      <input
+                        ref={imagesInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        hidden
+                        onChange={handleImageFiles}
+                      />
+
+                      <Box sx={{ mb: 2 }}>
                         <Button
-                          variant="contained"
-                          onClick={handleAddImage}
-                          disabled={!imageInput.trim()}
+                          variant="outlined"
                           size="small"
-                          sx={{
-                            borderRadius: 2,
-                            backgroundColor: '#2196f3',
-                            '&:hover': { backgroundColor: '#1976d2' },
-                            minWidth: 'auto',
-                            px: 2,
-                          }}
+                          disabled={imagesUploading}
+                          startIcon={
+                            imagesUploading ? (
+                              <CircularProgress size={16} />
+                            ) : (
+                              <CloudUploadIcon />
+                            )
+                          }
+                          onClick={() => imagesInputRef.current?.click()}
+                          sx={{ borderRadius: 2, textTransform: 'none' }}
                         >
-                          Add
+                          {imagesUploading ? 'Uploading...' : 'Upload Images'}
                         </Button>
+                        <FormHelperText sx={{ ml: 1, display: 'inline' }}>
+                          Up to 10 at a time.
+                        </FormHelperText>
                       </Box>
 
                       <Box
@@ -1828,23 +1977,48 @@ const countryOptions = filtersData?.data?.countryOfOrigin || [];
                             color="textSecondary"
                             sx={{ alignSelf: 'center' }}
                           >
-                            No images added yet
+                            No images yet
                           </Typography>
                         ) : (
                           formData.images.map((image, index) => (
-                            <Chip
-                              key={index}
-                              label={
-                                image.length > 30
-                                  ? `${image.substring(0, 30)}...`
-                                  : image
-                              }
-                              onDelete={() => handleRemoveImage(image)}
-                              size="small"
-                              color="info"
-                              variant="outlined"
-                              sx={{ borderRadius: 2 }}
-                            />
+                            <Box
+                              key={`${image}-${index}`}
+                              sx={{
+                                position: 'relative',
+                                width: 96,
+                                height: 96,
+                                borderRadius: 2,
+                                overflow: 'hidden',
+                                border: '1px solid #e0e0e0',
+                                lineHeight: 0,
+                              }}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={image}
+                                alt={`Product image ${index + 1}`}
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover',
+                                }}
+                              />
+                              <Tooltip title="Remove">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleRemoveImage(image)}
+                                  sx={{
+                                    position: 'absolute',
+                                    top: 4,
+                                    right: 4,
+                                    bgcolor: 'rgba(255,255,255,0.9)',
+                                    '&:hover': { bgcolor: '#fff' },
+                                  }}
+                                >
+                                  <DeleteOutlineIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
                           ))
                         )}
                       </Box>
