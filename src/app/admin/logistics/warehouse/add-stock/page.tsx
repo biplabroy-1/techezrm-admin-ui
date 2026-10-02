@@ -32,7 +32,8 @@ import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import ReactSelect from 'react-select';
+// Deferred to after mount: see ClientOnlyReactSelect for why.
+import ReactSelect from '@/components/ClientOnlyReactSelect';
 import AddProductModal from '../../../../../components/modals/AddProductModal';
 import { productService } from '@/api';
 import { useMutation, useQuery } from '@tanstack/react-query';

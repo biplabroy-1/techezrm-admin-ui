@@ -32,7 +32,10 @@ import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import ReactSelect from 'react-select';
+// Deferred to after mount: react-select's live region does not match when it is
+// prerendered, and React throws the whole server-rendered tree away when it does.
+import ReactSelect from '@/components/ClientOnlyReactSelect';
+import { formatCalendarDate } from '@/utils/formatDate';
 import { usePurchaseOrders } from '../../../../../hooks/usePurchaseOrder';
 
 import AddSupplierModal from '../../../../../components/modals/AddSupplierModal';
@@ -280,7 +283,10 @@ export default function AddPurchaseOrder() {
     status: PurchaseOrderStatus.PENDING,
     total_amount: 0,
     currency: 'USD',
-    expected_date: new Date().toISOString().split('T')[0], // Set today's date as default
+    // The LOCAL calendar date, not `new Date().toISOString()`. The latter is UTC, so
+    // for an admin west of UTC it seeds this form with tomorrow's date - and the
+    // mismatch between server and client is what produced the hydration error here.
+    expected_date: localToday(), // Set today's date as default
     items: [
       {
         product_id: '',
@@ -306,7 +312,15 @@ export default function AddPurchaseOrder() {
     shipping_notes: '',
   });
 
-  const [shippingMethods] = useState([
+  /** Today's date in the viewer's own timezone, as YYYY-MM-DD. */
+function localToday(): string {
+  const now = new Date();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${m}-${d}`;
+}
+
+const [shippingMethods] = useState([
     'Standard Shipping',
     'Express Shipping',
     'Overnight Delivery',
@@ -1331,7 +1345,7 @@ export default function AddPurchaseOrder() {
                         Expected Date:
                       </Typography>
                       <Typography variant="body2">
-                        {new Date(formData.expected_date).toLocaleDateString()}
+                        {formatCalendarDate(formData.expected_date)}
                       </Typography>
                     </Box>
                   )}
@@ -1343,7 +1357,7 @@ export default function AddPurchaseOrder() {
                         Shipping Date:
                       </Typography>
                       <Typography variant="body2">
-                        {new Date(formData.shipping_date).toLocaleDateString()}
+                        {formatCalendarDate(formData.shipping_date)}
                       </Typography>
                     </Box>
                   )}
