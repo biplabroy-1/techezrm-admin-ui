@@ -54,7 +54,20 @@ export interface CertPayload {
  */
 export function buildCertPayload(form: CertFormState): CertPayload {
   return {
-    name: form.name.trim(),
+    // NEVER trim this. It is the row's identity, not a label: 236 products store
+    // the catalogue's names in `dietaryAttributes[].title`, copied verbatim out of
+    // Supabase, and the tenth row of `certification_types` is stored as "HACCP "
+    // - with a trailing space. Trimming renamed that row to "HACCP" on any save,
+    // including a save that only flipped `isActive`, so the catalogue stopped
+    // matching 236 products' stored titles. It fails SILENTLY: the product-side
+    // picker compares trimmed, so nothing looks broken until something compares
+    // the strings exactly. Send it byte for byte.
+    name: form.name,
+    // `description` and `iconName` ARE still trimmed, and that asymmetry is
+    // deliberate: no product references either of them, so normalising them can
+    // only lose stray whitespace, never sever a reference. Trimming is not what
+    // made this field unclearable - the `|| undefined` above was - so both keep
+    // being sent unconditionally, where '' still clears.
     description: form.description.trim(),
     iconName: form.iconName.trim(),
     displayOrder: Number(form.displayOrder) || 0,
@@ -71,6 +84,14 @@ export function buildCertPayload(form: CertFormState): CertPayload {
  * decides an absent key means. Sending the row's own values makes the toggle's
  * effect exactly "isActive is now the other value" and nothing else - it cannot
  * accidentally rename a row or reorder the list as a side effect of being toggled.
+ *
+ * That claim is only true because this DELEGATES to `buildCertPayload` rather than
+ * rebuilding the payload. It did not used to: `name` was trimmed inside the builder,
+ * so the toggle inherited the trim and the row was renamed by a control whose
+ * entire job was to flip a boolean. `description` and `iconName` are still
+ * normalised here - that is not a rename or a reorder, and it matches what the save
+ * path does - but `name` now round-trips byte for byte, which is what makes
+ * "cannot accidentally rename a row" true rather than merely intended.
  */
 export function buildCertTogglePayload(
   row: CertFormState & { _id: string }

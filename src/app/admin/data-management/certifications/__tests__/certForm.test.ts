@@ -111,9 +111,11 @@ test('no field of the payload is ever undefined', () => {
   }
 });
 
-test('strings are trimmed', () => {
+test('description and iconName are trimmed', () => {
+  // Retitled from "strings are trimmed": that name stopped being true when `name`
+  // became exempt. `description` and `iconName` are free text referenced by
+  // nothing, so trimming them is still right - see the block below for why.
   const payload = buildCertPayload(FORM);
-  expect(payload.name).toBe('FSSAI');
   expect(payload.description).toBe('Food safety certification.');
   expect(payload.iconName).toBe('VerifiedUser');
 });
@@ -127,7 +129,7 @@ test('the toggle flips isActive and carries the rest of the row through', () => 
   // Carried, not dropped: this writes through the general PUT, so a payload holding
   // only isActive depends on the server treating an absent key as "leave alone" -
   // which is precisely the assumption that broke the clear-field controls above.
-  expect(payload.name).toBe('FSSAI');
+  expect(payload.name).toBe('  FSSAI  ');
   expect(payload.displayOrder).toBe(2);
   expect(payload.fileUrl).toBe('https://cdn.example/fssai.pdf');
 });
@@ -143,4 +145,82 @@ test('the toggle does not leak the row id into the payload', () => {
   // rejected or, worse, be taken as an instruction to change the document's identity.
   const payload: any = buildCertTogglePayload({ ...FORM, _id: 'a' });
   expect('_id' in payload).toBe(false);
+});
+
+/* ---- the name is an identity, not a label ---- */
+
+/**
+ * The tenth row of `certification_types` as it is ACTUALLY stored, verified
+ * against live Atlas: the name carries a trailing space, and 236 products carry
+ * that same string verbatim in their `dietaryAttributes[].title`, because the
+ * migration copied it out of Supabase without normalising it.
+ *
+ * BUILT, never typed as a literal. Two earlier rounds of work in this project
+ * shipped tests that passed against the exact regression they targeted, because a
+ * JSDoc quoted the very string the assertion searched for - so the expected value
+ * here is derived from a fixture and the padding is re-checked numerically. A
+ * comment, in this file or in certForm.ts, cannot satisfy any assertion below.
+ */
+const STORED_HACCP = ['HACCP', ' '].join('');
+
+test("the catalogue's own name survives a save with its trailing space intact", () => {
+  // The bug: `name: form.name.trim()`. Saving ANY field of the HACCP row -
+  // even just flipping isActive - rewrote it to "HACCP", and the catalogue row
+  // stopped matching the title 236 products have stored. Nothing reports that:
+  // the product-side picker compares trimmed, so the mismatch is invisible until
+  // something compares the strings exactly.
+  const payload = buildCertPayload({ ...FORM, name: STORED_HACCP });
+
+  expect(payload.name).toBe(STORED_HACCP);
+  // Not "ends with HACCP", not "matches after trim" - the exact bytes, stated
+  // twice and in numbers, so no looser matcher can drift into passing this.
+  expect(payload.name.length).toBe(6);
+  expect(payload.name.charCodeAt(5)).toBe(32);
+  expect(payload.name).not.toBe(STORED_HACCP.trim());
+});
+
+test('a name that is already clean is left exactly as it is', () => {
+  // The same code path must not "helpfully" trim a clean name either: the row
+  // whose stored name is "HACCP" is a different row from the one stored as
+  // "HACCP ", and collapsing them is the same damage one merge later.
+  const payload = buildCertPayload({ ...FORM, name: 'HACCP' });
+
+  expect(payload.name).toBe('HACCP');
+  expect(payload.name.length).toBe(5);
+});
+
+test('the rule is "never trim the name", not "special-case the HACCP row"', () => {
+  // Nothing in the catalogue is named this. A fix that spared only the HACCP row
+  // would still silently rename every future row an admin pastes in with padding,
+  // and it would be discovered the same way - by nothing.
+  const padded = ['  ', 'Organic', '  '].join('');
+
+  expect(buildCertPayload({ ...FORM, name: padded }).name).toBe(padded);
+  expect(buildCertPayload({ ...FORM, name: padded }).name.length).toBe(
+    2 + 'Organic'.length + 2
+  );
+});
+
+test('the name is still sent on every save, empty included', () => {
+  // The other half of the fix. Exempt from trimming is NOT the same as exempt
+  // from being sent: there is no `|| undefined` on this field, because that is
+  // the I1 bug three lines up and it would make the name unclearable again.
+  const payload = buildCertPayload({ ...FORM, name: '' });
+
+  expect('name' in payload).toBe(true);
+  expect(payload.name).toBe('');
+  expect(payload.name).not.toBeUndefined();
+});
+
+test('the inline toggle carries the stored name through byte for byte', () => {
+  // The toggle is the worse half of the original bug: it writes through the same
+  // PUT /:id carrying every field, so flipping isActive and nothing else renamed
+  // the row. It shares buildCertPayload, so it now inherits the fix - which is
+  // only true because it delegates rather than rebuilding the payload.
+  const payload = buildCertTogglePayload({ ...FORM, _id: 'a', name: STORED_HACCP });
+
+  expect(payload.isActive).toBe(false);
+  expect(payload.name).toBe(STORED_HACCP);
+  expect(payload.name.length).toBe(6);
+  expect(payload.name.charCodeAt(5)).toBe(32);
 });
