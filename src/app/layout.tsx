@@ -9,8 +9,8 @@ import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer } from 'react-toastify';
 
 export const metadata: Metadata = {
-  title: 'EZRM - Home',
-  description: 'Welcome to EZRM - Raw Materials Simplified',
+  title: 'EZRM Admin',
+  description: 'EZRM admin',
 };
 
 export default function RootLayout({

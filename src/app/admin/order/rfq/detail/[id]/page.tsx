@@ -193,15 +193,15 @@ const RFQDetail = () => {
                   <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#333", mb: 0 }}>
                     {rfqData.customerName}
                   </Typography>
+                  {/* These lines used to be hardcoded ("India", "5 Orders", "Customer for 2 years"). */}
                   <Typography variant="body2" sx={{ color: "#666", mb: 0 }}>
-                    India
+                    {rfqData.country || "Country not provided"}
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "#666", mb: 0 }}>
-                    <span style={{ color: "#3f51b5" }}>5 Orders</span>
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: "#666" }}>
-                    <span style={{ color: "#3f51b5" }}>Customer for 2 years</span>
-                  </Typography>
+                  {rfqData.source && (
+                    <Typography variant="body2" sx={{ color: "#666" }}>
+                      Via {rfqData.source}
+                    </Typography>
+                  )}
                 </Box>
               </Box>
 
@@ -244,6 +244,28 @@ const RFQDetail = () => {
                 <Typography variant="body2">{rfqData.quantity}</Typography>
               </Box>
 
+              {/* Bulk quote form answers. Older RFQs have none of these. */}
+              {(
+                [
+                  ["Service", rfqData.serviceType],
+                  ["Format", rfqData.productFormat],
+                  ["Annual volume", rfqData.volume ? `${rfqData.volume} ${rfqData.volumeUnit || ""}` : undefined],
+                  ["Packaging", rfqData.packaging],
+                  ["Target market", rfqData.targetMarket],
+                  ["Certifications", rfqData.certificationsRequired],
+                  ["Timeline", rfqData.timeline],
+                ] as Array<[string, string | undefined]>
+              )
+                .filter(([, v]) => v)
+                .map(([label, value]) => (
+                  <Box key={label} sx={{ mb: 2, display: "flex", gap: 10 }}>
+                    <Typography variant="body2" sx={{ color: "#666", mb: 1, minWidth: 110 }}>
+                      {label}
+                    </Typography>
+                    <Typography variant="body2">{value}</Typography>
+                  </Box>
+                ))}
+
               <Box sx={{ mb: 3, display: "flex", gap: 10 }}>
                 <Typography variant="body2" sx={{ color: "#666", mb: 1 }}>
                   Location
@@ -272,7 +294,7 @@ const RFQDetail = () => {
               Company Details
             </Typography>
             <Typography variant="body1" sx={{ fontWeight: 500, color: "#333", mb: 2 }}>
-              {rfqData.customerName} Company
+              {rfqData.companyName || "Company not provided"}
             </Typography>
             <Box sx={{ display: "flex", mb: 2, alignItems: "flex-start" }}>
               <LocationOn sx={{ color: "#f57c00", mr: 1, fontSize: "1.2rem" }} />
@@ -283,7 +305,7 @@ const RFQDetail = () => {
             <Box sx={{ display: "flex", mb: 2, alignItems: "center" }}>
               <Phone sx={{ color: "#666", mr: 1, fontSize: "1.2rem" }} />
               <Typography variant="body2" sx={{ color: "#666" }}>
-                {rfqData.customerPhone}
+                {[rfqData.customerPhoneCountryCode, rfqData.customerPhone].filter(Boolean).join(" ")}
               </Typography>
             </Box>
             <Box sx={{ display: "flex", alignItems: "center" }}>

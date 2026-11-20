@@ -14,11 +14,26 @@ export interface RFQItem {
   urgency: string
   status: string
   expectedDeliveryDate: string
-  budget: number
+  /** Free text on new RFQs ("$1000 - $5000"), a number on older ones. */
+  budget?: number | string
   additionalRequirements: string
   attachments: string[]
   createdAt: string
   updatedAt: string
+  customerPhoneCountryCode?: string
+  companyName?: string
+  companyWebsiteLink?: string
+  // Bulk quote form (2026-11); absent on older RFQs.
+  country?: string
+  serviceType?: string
+  productFormat?: string
+  volume?: number
+  volumeUnit?: string
+  packaging?: string
+  targetMarket?: string
+  certificationsRequired?: string
+  timeline?: string
+  source?: string
 }
 
 export interface GetRFQParams {
